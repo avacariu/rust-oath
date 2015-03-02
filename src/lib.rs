@@ -1,11 +1,10 @@
-#![feature(core, old_io)]
+#![feature(core)]
 
 extern crate crypto;
 extern crate "rustc-serialize" as rustc_serialize;
 extern crate time;
 
 // TODO: find out where this function is going to be once old_io is gone
-use std::old_io::extensions::{u64_to_be_bytes, u64_from_be_bytes};
 use std::num::Int;
 use crypto::sha1::Sha1;
 use crypto::hmac::Hmac;
@@ -13,9 +12,34 @@ use crypto::mac::Mac;
 use crypto::digest::Digest;
 use rustc_serialize::hex::FromHex;
 
+fn u64_from_be_bytes_4(bytes: &[u8], start: usize) -> u64 {
+    let mut val = 0u64;
+
+    val += (bytes[start]   as u64) << ((3 * 8) as u64);
+    val += (bytes[start+1] as u64) << ((2 * 8) as u64);
+    val += (bytes[start+2] as u64) << ((1 * 8) as u64);
+    val += (bytes[start+3] as u64) << ((0 * 8) as u64);
+
+    val
+}
+
+fn u64_to_be_bytes_8(data: u64) -> Vec<u8> {
+    let mut v = Vec::new();
+    v.push((data >> 56) as u8);
+    v.push((data >> 48) as u8);
+    v.push((data >> 40) as u8);
+    v.push((data >> 32) as u8);
+    v.push((data >> 24) as u8);
+    v.push((data >> 16) as u8);
+    v.push((data >> 8) as u8);
+    v.push(data as u8);
+
+    v
+}
+
 fn dynamic_truncation(hs: &[u8]) -> u64 {
     let offset_bits = (hs[19] & 0xf) as usize;
-    let p = u64_from_be_bytes(hs, offset_bits, 4);
+    let p = u64_from_be_bytes_4(hs, offset_bits);
 
     p & 0x7fffffff
 }
@@ -23,9 +47,8 @@ fn dynamic_truncation(hs: &[u8]) -> u64 {
 pub fn hotp_custom<D: Digest>(key: &[u8], counter: u64, digits: u32,
                               hash: D) -> u64 {
     let mut hmac = Hmac::new(hash, key);
-    u64_to_be_bytes(counter, 8, |bytes| {
-        hmac.input(bytes)
-    });
+    let bytes = u64_to_be_bytes_8(counter);
+    hmac.input(bytes.as_slice());
     let result = hmac.result();
     let hs = result.code();
 
