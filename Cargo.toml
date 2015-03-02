@@ -3,6 +3,14 @@
 name = "rust-oath"
 version = "0.0.1"
 authors = ["Andrei Vacariu <andrei@avacariu.me>"]
+license = "MIT"
+description = """
+An pure Rust implementation of OATH algorithms. Currently provides HOTP, with
+TOTP and OCRA in progress.
+"""
+homepage = "https://github.com/vlad003/rust-oath"
+repository = "https://github.com/vlad003/rust-oath"
+keywords = ["oath", "totp", "hotp", "ocra"]
 
 [dependencies]
 rust-crypto = "*"
