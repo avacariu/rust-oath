@@ -1,0 +1,8 @@
+[package]
+
+name = "rust-oath"
+version = "0.0.1"
+authors = ["Andrei Vacariu <andrei@avacariu.me>"]
+
+[dependencies]
+rust-crypto = "*"
