@@ -1,4 +1,5 @@
-# rust-oath
+# rust-oath [![Build Status](https://travis-ci.org/vlad003/rust-oath.svg)](https://travis-ci.org/vlad003/rust-oath)
+
 
 This library aims to provide implementations of HOTP, TOTP, and OCRA as
 specified by the RFCs.
