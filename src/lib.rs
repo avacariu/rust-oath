@@ -2,6 +2,7 @@
 
 extern crate crypto;
 extern crate "rustc-serialize" as rustc_serialize;
+extern crate time;
 
 // TODO: find out where this function is going to be once old_io is gone
 use std::old_io::extensions::{u64_to_be_bytes, u64_from_be_bytes};
@@ -43,9 +44,35 @@ pub fn hotp(key: &str, counter: u64, digits: usize) -> Result<u64, &str> {
     }
 }
 
+pub fn totp_custom<D: Digest>(key: &[u8], digits: usize, epoch: u64,
+                              time_step: u64, current_time: u64,
+                              hash: D) -> u64 {
+    let counter = (current_time - epoch) / time_step;
+    hotp_custom(key, counter, digits, hash)
+}
+
+pub fn totp_raw(key: &[u8], digits: usize, epoch: u64, time_step: u64) -> u64 {
+    let hash = Sha1::new();
+    let current_time = time::get_time();
+    totp_custom(key, digits, epoch, time_step, current_time.sec as u64, hash)
+}
+
+pub fn totp(key: &str, digits: usize, epoch: u64,
+            time_step: u64) -> Result<u64, &str> {
+    match key.from_hex() {
+        Ok(bytes) => Ok(totp_raw(bytes.as_slice(), digits, epoch, time_step)),
+        Err(_) => Err("Unable to parse hex.")
+    }
+}
+
 #[test]
-fn it_works() {
+fn test_hotp() {
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
     assert_eq!(hotp_custom(b"\xff", 23, 6, Sha1::new()), 330795);
+}
+
+#[test]
+fn test_totp() {
+    assert_eq!(totp_custom(b"\xff", 6, 0, 1, 23, Sha1::new()), 330795);
 }
