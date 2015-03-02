@@ -9,6 +9,7 @@ use std::num::Int;
 use crypto::sha1::Sha1;
 use crypto::hmac::Hmac;
 use crypto::mac::Mac;
+use crypto::digest::Digest;
 use rustc_serialize::hex::FromHex;
 
 fn dynamic_truncation(hs: &[u8]) -> u64 {
@@ -18,8 +19,9 @@ fn dynamic_truncation(hs: &[u8]) -> u64 {
     p & 0x7fffffff
 }
 
-pub fn hotp_raw(key: &[u8], counter: u64, digits: usize) -> u64 {
-    let mut hmac = Hmac::new(Sha1::new(), key);
+pub fn hotp_custom<D: Digest>(key: &[u8], counter: u64, digits: usize,
+                              hash: D) -> u64 {
+    let mut hmac = Hmac::new(hash, key);
     u64_to_be_bytes(counter, 8, |bytes| {
         hmac.input(bytes)
     });
@@ -27,6 +29,11 @@ pub fn hotp_raw(key: &[u8], counter: u64, digits: usize) -> u64 {
     let hs = result.code();
 
     dynamic_truncation(hs) % 10.pow(digits)
+}
+
+pub fn hotp_raw(key: &[u8], counter: u64, digits: usize) -> u64 {
+    let hash = Sha1::new();
+    hotp_custom(key, counter, digits, hash)
 }
 
 pub fn hotp(key: &str, counter: u64, digits: usize) -> Result<u64, &str> {
@@ -40,4 +47,5 @@ pub fn hotp(key: &str, counter: u64, digits: usize) -> Result<u64, &str> {
 fn it_works() {
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
+    assert_eq!(hotp_custom(b"\xff", 23, 6, Sha1::new()), 330795);
 }
