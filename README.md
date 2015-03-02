@@ -15,9 +15,8 @@ Planned:
 
 ## Examples
 
-The `hotp` function requires the key to be represented as a byte string. It
-might be nice for it accept a hex or base32 string instead, but I wanted to
-limit the number of dependencies.
-
     // htop(key, counter, digits)
-    assert_eq!(hotp(b"\xff", 23, 6), 330795)
+    // hotp_raw takes bytes as the key
+    assert_eq!(hotp_raw(b"\xff", 23, 6), 330795)
+    // hotp takes a hex string as the key
+    assert_eq!(hotp("ff", 23, 6), 330795)
