@@ -12,6 +12,13 @@ use crypto::mac::Mac;
 use crypto::digest::Digest;
 use rustc_serialize::hex::FromHex;
 
+pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
+    match data.from_hex() {
+        Ok(d) => Ok(d),
+        Err(_) => Err("Unable to decode hex")
+    }
+}
+
 fn u64_from_be_bytes_4(bytes: &[u8], start: usize) -> u64 {
     let mut val = 0u64;
 
@@ -93,6 +100,7 @@ fn test_hotp() {
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
     assert_eq!(hotp_custom(b"\xff", 23, 6, Sha1::new()), 330795);
+    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_slice(), 23, 6, Sha1::new()), 330795);
 }
 
 #[test]
