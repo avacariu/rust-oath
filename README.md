@@ -34,3 +34,12 @@ All the times below are in seconds.
     totp_raw(b"\xff", 6, 0, 30);
     // totp_custom(key, digits, epoch, time_step, current_time, hash)
     totp_custom(b"\xff", 6, 0, 30, 255, Sha1::new());
+
+### Misc
+
+If you don't want to use `rustc-serialize` directly, this library provides a
+wrapper around `from_hex()`. This helps with the functions that expect byte
+arrays.
+
+    let seed = oath::from_hex("ff").unwrap();
+    totp_raw(seed.as_slice(), 6, 0, 30);
