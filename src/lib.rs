@@ -104,6 +104,7 @@ fn test_hotp() {
     assert_eq!(hotp_custom(b"\xff", 23, 6, Sha1::new()), 330795);
     assert_eq!(hotp_custom(from_hex("ff").unwrap().as_slice(), 23, 6, Sha1::new()), 330795);
     assert_eq!(hotp_custom(from_hex("ff").unwrap().as_slice(), 23, 6, Sha256::new()), 225210);
+    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_slice(), 10, 7, Sha1::new()), 7615146);
 }
 
 #[test]
