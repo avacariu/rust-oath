@@ -97,10 +97,13 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
 
 #[test]
 fn test_hotp() {
+    use crypto::sha2::Sha256;
+
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
     assert_eq!(hotp_custom(b"\xff", 23, 6, Sha1::new()), 330795);
     assert_eq!(hotp_custom(from_hex("ff").unwrap().as_slice(), 23, 6, Sha1::new()), 330795);
+    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_slice(), 23, 6, Sha256::new()), 225210);
 }
 
 #[test]
