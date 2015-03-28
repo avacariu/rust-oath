@@ -1,7 +1,8 @@
 #![feature(core)]
+#![feature(convert)]
 
 extern crate crypto;
-extern crate "rustc-serialize" as rustc_serialize;
+extern crate rustc_serialize;
 extern crate time;
 
 // TODO: find out where this function is going to be once old_io is gone
@@ -55,7 +56,7 @@ pub fn hotp_custom<D: Digest>(key: &[u8], counter: u64, digits: u32,
                               hash: D) -> u64 {
     let mut hmac = Hmac::new(hash, key);
     let bytes = u64_to_be_bytes_8(counter);
-    hmac.input(bytes.as_slice());
+    hmac.input(bytes.as_ref());
     let result = hmac.result();
     let hs = result.code();
 
@@ -69,7 +70,7 @@ pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
 
 pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
     match key.from_hex() {
-        Ok(bytes) => Ok(hotp_raw(bytes.as_slice(), counter, digits)),
+        Ok(bytes) => Ok(hotp_raw(bytes.as_ref(), counter, digits)),
         Err(_) => Err("Unable to parse hex.")
     }
 }
@@ -90,7 +91,7 @@ pub fn totp_raw(key: &[u8], digits: u32, epoch: u64, time_step: u64) -> u64 {
 pub fn totp(key: &str, digits: u32, epoch: u64,
             time_step: u64) -> Result<u64, &str> {
     match key.from_hex() {
-        Ok(bytes) => Ok(totp_raw(bytes.as_slice(), digits, epoch, time_step)),
+        Ok(bytes) => Ok(totp_raw(bytes.as_ref(), digits, epoch, time_step)),
         Err(_) => Err("Unable to parse hex.")
     }
 }
@@ -102,9 +103,10 @@ fn test_hotp() {
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
     assert_eq!(hotp_custom(b"\xff", 23, 6, Sha1::new()), 330795);
-    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_slice(), 23, 6, Sha1::new()), 330795);
-    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_slice(), 23, 6, Sha256::new()), 225210);
-    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_slice(), 10, 7, Sha1::new()), 7615146);
+    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), 23, 6, Sha1::new()), 330795);
+    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), 23, 6, Sha256::new()), 225210);
+    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), 10, 7, Sha1::new()), 7615146);
+    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), 10, 7, Sha256::new()), 6447746);
 }
 
 #[test]
