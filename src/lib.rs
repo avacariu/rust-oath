@@ -1,12 +1,7 @@
-#![feature(core)]
-#![feature(convert)]
-
 extern crate crypto;
 extern crate rustc_serialize;
 extern crate time;
 
-// TODO: find out where this function is going to be once old_io is gone
-use std::num::Int;
 use crypto::sha1::Sha1;
 use crypto::hmac::Hmac;
 use crypto::mac::Mac;
@@ -60,7 +55,7 @@ pub fn hotp_custom<D: Digest>(key: &[u8], counter: u64, digits: u32,
     let result = hmac.result();
     let hs = result.code();
 
-    dynamic_truncation(hs) % 10.pow(digits)
+    dynamic_truncation(hs) % 10_u64.pow(digits)
 }
 
 pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
