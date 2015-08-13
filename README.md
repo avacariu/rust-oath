@@ -13,6 +13,11 @@ Planned:
 
 * OCRA ([RFC 6287](https://tools.ietf.org/html/rfc6287))
 
+**NOTE:** SHA2 doesn't work. Only SHA1 works. Why? I haven't been able to
+figure that out. It might be an issue in the `rust-crypto` library, but I
+haven't been able to spot it. Digests are used interchangeably in my code, same
+as in the `rust-crypto` HMAC code, so I don't know what's going on.
+
 ## Examples
 
 ### HOTP
