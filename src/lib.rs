@@ -93,7 +93,7 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
 
 #[test]
 fn test_hotp() {
-    use crypto::sha2::Sha256;
+    //use crypto::sha2::Sha256;
 
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
@@ -117,8 +117,8 @@ fn test_hotp() {
 
 #[test]
 fn test_totp() {
-    use crypto::sha2::Sha256;
-    use crypto::sha2::Sha512;
+    //use crypto::sha2::Sha256;
+    //use crypto::sha2::Sha512;
     assert_eq!(totp_custom(b"\xff", 6, 0, 1, 23, Sha1::new()), 330795);
 
     // test values from RFC 6238
