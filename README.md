@@ -18,6 +18,10 @@ figure that out. It might be an issue in the `rust-crypto` library, but I
 haven't been able to spot it. Digests are used interchangeably in my code, same
 as in the `rust-crypto` HMAC code, so I don't know what's going on.
 
+**PRs are more than welcome!** I'm not using Rust much these days, so I don't
+notice if anything in this code breaks. If you send me a PR, I'll do my best to
+merge it quickly.
+
 ## Examples
 
 ### HOTP
