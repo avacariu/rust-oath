@@ -44,6 +44,20 @@ All the times below are in seconds.
     // totp_custom(key, digits, epoch, time_step, current_time, hash)
     totp_custom(b"\xff", 6, 0, 30, 255, Sha1::new());
 
+### Google Authenticator
+
+Keys provided by Google are encoded using base32. You'll need to convert them
+before passing them to any of the functions in this crate.
+
+A simple way to do this is using the [base32](https://crates.io/crates/base32/)
+crate.
+
+    // assuming AAAAAAAAAAAAAAAA is your key
+    base32::decode(base32::Alphabet::RFC4648 {padding: false}, "AAAAAAAAAAAAAAAA").unwrap().as_ref()
+
+And pass the result of that as the key parameter to the HOTP and TOTP
+functions.
+
 ### Misc
 
 If you don't want to use `rustc-serialize` directly, this library provides a
