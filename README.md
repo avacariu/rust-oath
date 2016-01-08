@@ -66,3 +66,9 @@ arrays.
 
     let seed = oath::from_hex("ff").unwrap();
     totp_raw(seed.as_slice(), 6, 0, 30);
+
+## Licensing
+
+This library is licensed under the MIT license. If you're a potential user, or
+a current user, and this license causes an issue for you, I'm willing to
+consider multi-licensing it.
