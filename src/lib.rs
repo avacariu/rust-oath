@@ -146,3 +146,25 @@ fn test_totp() {
     //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 20000000000, Sha256::new()), 77737706);
     //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 20000000000, Sha512::new()), 47863826);
 }
+
+#[cfg(test)]
+mod ocra_tests {
+    use crypto::sha1::Sha1;
+    use crypto::digest::Digest;
+
+    static STANDARD_KEY_20: &'static str = "12345678901234567890";
+    static STANDARD_KEY_32: &'static str = "12345678901234567890123456789012";
+    static STANDARD_KEY_64: &'static str = "1234567890123456789012345678901234567890123456789012345678901234";
+    static PIN_1234_SHA1: [u8; 20] = [0x71, 0x10, 0xed, 0xa4, 0xd0, 0x9e, 0x06, 0x2a, 0xa5, 0xe4,
+                                      0xa3, 0x90, 0xb0, 0xa5, 0x72, 0xac, 0x0d, 0x2c, 0x02, 0x20];
+    #[test]
+    fn sha1_pin_correct() {
+        let mut sha: Sha1 = Sha1::new();
+        sha.input_str("1234");
+
+        let mut output = [0u8; 20];
+        sha.result(&mut output);
+
+        assert!(&PIN_1234_SHA1[..] == output);
+    }
+}
