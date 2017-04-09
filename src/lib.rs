@@ -33,12 +33,10 @@ fn dynamic_truncation(hs: &[u8]) -> u64 {
     p & 0x7fffffff
 }
 
-pub fn hotp_custom<D: Digest>(key: &[u8], counter: u64, digits: u32,
+pub fn hotp_custom<D: Digest>(key: &[u8], message: &[u8], digits: u32,
                               hash: D) -> u64 {
     let mut hmac = Hmac::new(hash, key);
-    let message = counter.to_be();
-    let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
-    hmac.input(msg_ptr);
+    hmac.input(message);
     let result = hmac.result();
     let hs = result.code();
 
@@ -47,7 +45,9 @@ pub fn hotp_custom<D: Digest>(key: &[u8], counter: u64, digits: u32,
 
 pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
     let hash = Sha1::new();
-    hotp_custom(key, counter, digits, hash)
+    let message = counter.to_be();
+    let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
+    hotp_custom(key, msg_ptr, digits, hash)
 }
 
 pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
@@ -61,7 +61,9 @@ pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
                               time_step: u64, current_time: u64,
                               hash: D) -> u64 {
     let counter = (current_time - epoch) / time_step;
-    hotp_custom(key, counter, digits, hash)
+    let message = counter.to_be();
+    let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
+    hotp_custom(key, msg_ptr, digits, hash)
 }
 
 pub fn totp_raw(key: &[u8], digits: u32, epoch: u64, time_step: u64) -> u64 {
@@ -82,10 +84,13 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
 fn test_hotp() {
     //use crypto::sha2::Sha256;
 
+    let var_23_as_be_arr = [0, 0, 0, 0, 0, 0, 0, 23];
+    let var_10_as_be_arr = [0, 0, 0, 0, 0, 0, 0, 10];
+
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
-    assert_eq!(hotp_custom(b"\xff", 23, 6, Sha1::new()), 330795);
-    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), 23, 6, Sha1::new()), 330795);
+    assert_eq!(hotp_custom(b"\xff", &var_23_as_be_arr, 6, Sha1::new()), 330795);
+    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha1::new()), 330795);
     // test values from RFC 4226
     assert_eq!(hotp_raw(b"12345678901234567890", 0, 6), 755224);
     assert_eq!(hotp_raw(b"12345678901234567890", 1, 6), 287082);
@@ -98,7 +103,7 @@ fn test_hotp() {
     assert_eq!(hotp_raw(b"12345678901234567890", 8, 6), 399871);
     assert_eq!(hotp_raw(b"12345678901234567890", 9, 6), 520489);
     //assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), 23, 6, Sha256::new()), 225210);
-    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), 10, 7, Sha1::new()), 7615146);
+    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha1::new()), 7615146);
     //assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), 10, 7, Sha256::new()), 6447746);
 }
 
