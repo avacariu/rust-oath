@@ -26,20 +26,6 @@ fn u64_from_be_bytes_4(bytes: &[u8], start: usize) -> u64 {
     val
 }
 
-fn u64_to_be_bytes_8(data: u64) -> Vec<u8> {
-    let mut v = Vec::new();
-    v.push((data >> 56) as u8);
-    v.push((data >> 48) as u8);
-    v.push((data >> 40) as u8);
-    v.push((data >> 32) as u8);
-    v.push((data >> 24) as u8);
-    v.push((data >> 16) as u8);
-    v.push((data >> 8) as u8);
-    v.push(data as u8);
-
-    v
-}
-
 fn dynamic_truncation(hs: &[u8]) -> u64 {
     let offset_bits = (hs[19] & 0xf) as usize;
     let p = u64_from_be_bytes_4(hs, offset_bits);
@@ -50,8 +36,9 @@ fn dynamic_truncation(hs: &[u8]) -> u64 {
 pub fn hotp_custom<D: Digest>(key: &[u8], counter: u64, digits: u32,
                               hash: D) -> u64 {
     let mut hmac = Hmac::new(hash, key);
-    let bytes = u64_to_be_bytes_8(counter);
-    hmac.input(bytes.as_ref());
+    let message = counter.to_be();
+    let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
+    hmac.input(msg_ptr);
     let result = hmac.result();
     let hs = result.code();
 
