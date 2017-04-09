@@ -1,12 +1,17 @@
 extern crate crypto;
 extern crate rustc_serialize;
 extern crate time;
+extern crate ramp;
 
 use crypto::sha1::Sha1;
 use crypto::hmac::Hmac;
 use crypto::mac::Mac;
 use crypto::digest::Digest;
 use rustc_serialize::hex::FromHex;
+use rustc_serialize::hex::ToHex;
+use std::io::Write as Write_io;
+use std::fmt::Write as Write_fmt;
+use ramp::Int;
 
 pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
     match data.from_hex() {
@@ -80,6 +85,139 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
     }
 }
 
+#[allow(non_snake_case)]
+pub fn ocra<'a>(suite: &str, key: &[u8], _counter: u64, question: &str,
+        _password: &[u8], _session_info: &[u8], _timestamp: &[u8]) -> Result<u64, &'a str> {
+    let parsed_suite: Vec<&str> = suite.split(':').collect();
+    if (parsed_suite.len() != 3) || (parsed_suite[0].to_uppercase() != "OCRA-1") {
+        return Err("Malformed suite string.");
+    }
+
+    let crypto_function: Vec<&str> = parsed_suite[1].split('-').collect();
+    if crypto_function[0].to_uppercase() != "HOTP" {
+        return Err("Only HOTP crypto function is supported.");
+    }
+
+    if crypto_function[1].to_uppercase() != "SHA1" {
+        return Err("Only Sha1 is supported.")
+    }
+
+    let num_of_digits = if crypto_function.len() == 3 {
+        let temp_num = crypto_function[2].parse().unwrap_or(0);
+        if temp_num > 10 || temp_num < 4 {
+            return Err("Number of returned digits should satisfy: 4 <= num <= 10.");
+        }
+        temp_num
+    } else {
+        0
+    };
+
+    let data_input: Vec<&str> = parsed_suite[2].split('-').collect();
+    let QUESTION_LEN = 128; //Always.
+    let result: u64;
+    if data_input.len() == 1 {
+        let MESSAGE_LEN = suite.len() + 1 + QUESTION_LEN;
+        let mut message: Vec<u8> = Vec::with_capacity(MESSAGE_LEN);
+        message.extend_from_slice(suite.as_bytes());
+        message.push(0u8);    //Delimiter. Mandatory!
+        let push_result = push_correct_question(&mut message, parsed_suite[2], question);
+        match push_result {
+            Ok(_) => {
+                message.resize(MESSAGE_LEN, 0);
+                result = hotp_custom(key, message.as_slice(), num_of_digits, Sha1::new());
+            },
+            Err(err_str) => return Err(err_str),
+        }
+
+    } else {
+        return Err("Sorry, not implemented yet.");
+    }
+
+    Ok(result)
+}
+
+fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: &str, question: &str) -> Result<(), &'a str> {
+    let (q_type, q_length) = ocra_parse_question(q_info);
+    if question.len() != q_length {
+        return Err("Claimed and real question lengths are different.");
+    }
+    match q_type {
+        QType::A => {
+            let hex_representation: String = question.as_bytes().to_hex();
+            let mut hex_encoded: Vec<u8> = hex_representation.from_hex().unwrap();
+            message.append(hex_encoded.by_ref());
+        },
+        QType::N => {
+            let q_as_int: Int = Int::from_str_radix(question, 10).expect("Can't parse your numeric question.");
+            let sign = q_as_int.sign();
+            if sign == -1 {
+                return Err("Question number can't be negative!");
+            }
+            //Do nothing if sign == 0;
+            if sign == 1 {
+                // Let's make some calculations to prevent extra heap allocations.
+                // from_hex expects string to be even, but ramp's to_str_radix
+                // can return string with odd length
+                // bit_length() = floor(log2(abs(self)))+1
+                let bit_len: u32 = q_as_int.bit_length();
+                let num_of_chars = if bit_len % 4 != 0 {
+                    bit_len / 4 + 1
+                } else {
+                    bit_len / 4
+                };
+                let mut q_as_hex: String = String::with_capacity(num_of_chars as usize);
+                let write_result = write!(&mut q_as_hex, "{:X}", q_as_int);
+                match write_result {
+                    Ok(_) => {
+                        // Now tricky part! If length is odd, number must be padded with 0
+                        // on the right. Numeric value will change!
+                        // Padding on the left side (to keep number correct) will produce
+                        // wrong result!
+                        if num_of_chars % 2 == 1 {
+                            q_as_hex.push('0');
+                        }
+                        message.append(from_hex(q_as_hex.as_str()).unwrap().by_ref());
+                    },
+                    Err(_) => return Err("Unexpected error. Can't write to buffer."),
+                }
+
+            }
+        },
+        QType::H => {
+            if q_length % 2 == 0 {
+                message.append(from_hex(question).unwrap().by_ref());
+            } else {
+                let mut question_owned = String::with_capacity(q_length + 1);
+                question_owned.push_str(question);
+                question_owned.push('0');
+                message.append(from_hex(question_owned.as_str()).unwrap().by_ref());
+            }
+        },
+    };
+
+    Ok(())
+}
+
+enum QType {A, N, H}
+fn ocra_parse_question(question: &str) -> (QType, usize) {
+    assert_eq!(question.len(), 4);
+    let (type_str, len_str) = question.split_at(2);
+
+    let data: &[u8] = type_str.as_bytes();
+    assert!(data[0] == b'Q' || data[0] == b'q');
+    let q_type: QType = match data[1] {
+        b'a' | b'A' => QType::A,
+        b'n' | b'N' => QType::N,
+        b'h' | b'H' => QType::H,
+        _         => panic!("This question type is not supported! Use A/N/H, please."),
+    };
+
+    let q_len: usize = len_str.parse().unwrap();
+    assert!(q_len > 4 && q_len < 64, "Make sure you request question length such that 4 <= question_length <= 64.");
+
+    (q_type, q_len)
+}
+
 #[test]
 fn test_hotp() {
     //use crypto::sha2::Sha256;
@@ -141,14 +279,25 @@ fn test_totp() {
 
 #[cfg(test)]
 mod ocra_tests {
+    use ocra;
     use crypto::sha1::Sha1;
     use crypto::digest::Digest;
 
-    static STANDARD_KEY_20: &'static str = "12345678901234567890";
-    static STANDARD_KEY_32: &'static str = "12345678901234567890123456789012";
-    static STANDARD_KEY_64: &'static str = "1234567890123456789012345678901234567890123456789012345678901234";
-    static PIN_1234_SHA1: [u8; 20] = [0x71, 0x10, 0xed, 0xa4, 0xd0, 0x9e, 0x06, 0x2a, 0xa5, 0xe4,
-                                      0xa3, 0x90, 0xb0, 0xa5, 0x72, 0xac, 0x0d, 0x2c, 0x02, 0x20];
+    static STANDARD_KEY_20: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30];
+    static _STANDARD_KEY_32: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32];
+    static _STANDARD_KEY_64: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                                      0x31, 0x32, 0x33, 0x34];
+    static PIN_1234_SHA1: &[u8] = &[0x71, 0x10, 0xed, 0xa4, 0xd0, 0x9e, 0x06, 0x2a, 0xa5, 0xe4,
+                                    0xa3, 0x90, 0xb0, 0xa5, 0x72, 0xac, 0x0d, 0x2c, 0x02, 0x20];
     #[test]
     fn sha1_pin_correct() {
         let mut sha: Sha1 = Sha1::new();
@@ -158,5 +307,36 @@ mod ocra_tests {
         sha.result(&mut output);
 
         assert!(&PIN_1234_SHA1[..] == output);
+    }
+
+    #[test]
+    fn test_ocra_20byte_sha1() {
+        let suite = "OCRA-1:HOTP-SHA1-6:QN08";
+        let null = [];
+        // Test values from RFC 6287
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "00000000", &null, &null, &null), Ok(237653));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "11111111", &null, &null, &null), Ok(243178));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "22222222", &null, &null, &null), Ok(653583));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "33333333", &null, &null, &null), Ok(740991));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "44444444", &null, &null, &null), Ok(608993));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "55555555", &null, &null, &null), Ok(388898));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "66666666", &null, &null, &null), Ok(816933));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "77777777", &null, &null, &null), Ok(224598));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "88888888", &null, &null, &null), Ok(750600));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "99999999", &null, &null, &null), Ok(294470));
+
+        // Values, generated from original Java source
+        let suite2 = "OCRA-1:HOTP-SHA1-6:QH07";
+        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "153158E", &null, &null, &null), Ok(347935));
+        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "ABC1DEF", &null, &null, &null), Ok(857750));
+
+        let suite3 = "OCRA-1:HOTP-SHA1-6:QH08";
+        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "F153158E", &null, &null, &null), Ok(004133));
+        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "ABC10DEF", &null, &null, &null), Ok(277962));
+
+        // My values. Could be wrong.
+        let suite4 = "OCRA-1:HOTP-SHA1-6:QA31";
+        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Thanks avacariu for a nice lib!", &null, &null, &null), Ok(044742));
+        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Hope to see it in crates.io  :)", &null, &null, &null), Ok(516968));
     }
 }
