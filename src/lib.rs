@@ -4,6 +4,8 @@ extern crate time;
 extern crate ramp;
 
 use crypto::sha1::Sha1;
+use crypto::sha2::Sha256;
+use crypto::sha2::Sha512;
 use crypto::hmac::Hmac;
 use crypto::mac::Mac;
 use crypto::digest::Digest;
@@ -32,7 +34,7 @@ fn u64_from_be_bytes_4(bytes: &[u8], start: usize) -> u64 {
 }
 
 fn dynamic_truncation(hs: &[u8]) -> u64 {
-    let offset_bits = (hs[19] & 0xf) as usize;
+    let offset_bits = (hs[hs.len()-1] & 0xf) as usize;
     let p = u64_from_be_bytes_4(hs, offset_bits);
 
     p & 0x7fffffff
@@ -85,9 +87,8 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
     }
 }
 
-#[allow(non_snake_case)]
-pub fn ocra<'a>(suite: &str, key: &[u8], _counter: u64, question: &str,
-        _password: &[u8], _session_info: &[u8], _timestamp: &[u8]) -> Result<u64, &'a str> {
+pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
+        password: &[u8], _session_info: &[u8], _timestamp: &[u8]) -> Result<u64, &'a str> {
     let parsed_suite: Vec<&str> = suite.split(':').collect();
     if (parsed_suite.len() != 3) || (parsed_suite[0].to_uppercase() != "OCRA-1") {
         return Err("Malformed suite string.");
@@ -98,9 +99,12 @@ pub fn ocra<'a>(suite: &str, key: &[u8], _counter: u64, question: &str,
         return Err("Only HOTP crypto function is supported.");
     }
 
-    if crypto_function[1].to_uppercase() != "SHA1" {
-        return Err("Only Sha1 is supported.")
-    }
+    let hotp_sha_type: SType = match crypto_function[1].to_uppercase().as_str() {
+        "SHA1" => SType::SHA1,
+        "SHA256" => SType::SHA256,
+        "SHA512" => SType::SHA512,
+        _ => return Err("Unknown hash type.")
+    };
 
     let num_of_digits = if crypto_function.len() == 3 {
         let temp_num = crypto_function[2].parse().unwrap_or(0);
@@ -113,34 +117,94 @@ pub fn ocra<'a>(suite: &str, key: &[u8], _counter: u64, question: &str,
     };
 
     let data_input: Vec<&str> = parsed_suite[2].split('-').collect();
-    let QUESTION_LEN = 128; //Always.
-    let result: u64;
-    if data_input.len() == 1 {
-        let MESSAGE_LEN = suite.len() + 1 + QUESTION_LEN;
-        let mut message: Vec<u8> = Vec::with_capacity(MESSAGE_LEN);
-        message.extend_from_slice(suite.as_bytes());
-        message.push(0u8);    //Delimiter. Mandatory!
-        let push_result = push_correct_question(&mut message, parsed_suite[2], question);
-        match push_result {
-            Ok(_) => {
-                message.resize(MESSAGE_LEN, 0);
-                result = hotp_custom(key, message.as_slice(), num_of_digits, Sha1::new());
+    // Counters
+    let     question_len:   usize = 128;
+    let mut counter_len:    usize = 0;
+    let mut hashed_pin_len: usize = 0;
+
+    let mut parsed_question_type: (QType, usize) = (QType::N, 0);
+    let mut parsed_pin_sha_type: (SType, usize);
+
+    for p in data_input {
+        let setting: &[u8] = p.as_bytes();
+        match setting[0] {
+            b'q' | b'Q' => {
+                match ocra_parse_question(p) {
+                    Ok(expr) => {
+                        parsed_question_type = expr;
+                        if question.len() != parsed_question_type.1 {
+                            return Err("Claimed and real question lengths are different.");
+                        }
+                    },
+                    Err(_) => return Err("Can't parse question."),
+                };
             },
+            b'c' | b'C' => counter_len = 8,
+            b'p' | b'P' => {
+                match parse_pin_sha_type(p) {
+                    Ok(expr) => {
+                        parsed_pin_sha_type = expr;
+                        hashed_pin_len = parsed_pin_sha_type.1;
+                        if password.len() != hashed_pin_len {
+                            return Err("Wrong hashed password length.");
+                        }
+                    },
+                    Err(_) => return Err("Can't parse hash."),
+                };
+            },
+            _ => return Err("Unknown parameter."),
+        }
+    }
+
+    let full_message_len = suite.len() + 1 + counter_len + question_len + hashed_pin_len;
+    let message_len_for_resizing = suite.len() + 1 + counter_len + question_len;
+
+    let mut message: Vec<u8> = Vec::with_capacity(full_message_len);
+    message.extend_from_slice(suite.as_bytes());
+    message.push(0u8);    //Delimiter. Mandatory!
+    if counter_len > 0 {
+        let counter_be = counter.to_be();
+        let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&counter_be as *const u64 as *const u8, 8) };
+        message.extend_from_slice(msg_ptr);
+    }
+    if parsed_question_type.1 != 0 {
+        let push_result = push_correct_question(&mut message, parsed_question_type, question);
+        match push_result {
+            Ok(_) => message.resize(message_len_for_resizing, 0),
             Err(err_str) => return Err(err_str),
         }
-
     } else {
-        return Err("Sorry, not implemented yet.");
+        return Err("No question parameter specified or question length is 0.");
     }
+    message.extend_from_slice(password);
+
+    let result: u64 = match hotp_sha_type {
+        SType::SHA1 => hotp_custom(key, message.as_slice(), num_of_digits, Sha1::new()),
+        SType::SHA256 => hotp_custom(key, message.as_slice(), num_of_digits, Sha256::new()),
+        SType::SHA512 => hotp_custom(key, message.as_slice(), num_of_digits, Sha512::new()),
+    };
 
     Ok(result)
 }
 
-fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: &str, question: &str) -> Result<(), &'a str> {
-    let (q_type, q_length) = ocra_parse_question(q_info);
-    if question.len() != q_length {
-        return Err("Claimed and real question lengths are different.");
+enum SType {SHA1, SHA256, SHA512}
+fn parse_pin_sha_type(psha: &str) -> Result<(SType, usize), &str> {
+    let psha_local: String = psha.to_uppercase();
+    if psha_local.starts_with("PSHA") {
+        let (_, num) = psha_local.split_at(4);
+        match num {
+            "1" => Ok((SType::SHA1, 20)),
+            "256" => Ok((SType::SHA256, 32)),
+            "512" => Ok((SType::SHA512, 64)),
+            _ => Err("Unknown SHA hash modification"),
+        }
+    } else {
+        Err("Unknown hashing algorithm")
     }
+}
+
+fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), question: &str) -> Result<(), &'a str> {
+    let (q_type, q_length) = q_info;
     match q_type {
         QType::A => {
             let hex_representation: String = question.as_bytes().to_hex();
@@ -199,23 +263,34 @@ fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: &str, question: &str
 }
 
 enum QType {A, N, H}
-fn ocra_parse_question(question: &str) -> (QType, usize) {
+fn ocra_parse_question(question: &str) -> Result<(QType, usize), &str> {
     assert_eq!(question.len(), 4);
     let (type_str, len_str) = question.split_at(2);
 
     let data: &[u8] = type_str.as_bytes();
     assert!(data[0] == b'Q' || data[0] == b'q');
-    let q_type: QType = match data[1] {
-        b'a' | b'A' => QType::A,
-        b'n' | b'N' => QType::N,
-        b'h' | b'H' => QType::H,
-        _         => panic!("This question type is not supported! Use A/N/H, please."),
+    let q_type_result: Result<QType, &str> = match data[1] {
+        b'a' | b'A' => Ok(QType::A),
+        b'n' | b'N' => Ok(QType::N),
+        b'h' | b'H' => Ok(QType::H),
+        _           => Err("This question type is not supported! Use A/N/H, please."),
     };
 
-    let q_len: usize = len_str.parse().unwrap();
-    assert!(q_len > 4 && q_len < 64, "Make sure you request question length such that 4 <= question_length <= 64.");
+    if q_type_result.is_err() {
+        return Err(q_type_result.err().unwrap());
+    }
 
-    (q_type, q_len)
+    let q_len_result = len_str.parse::<usize>();
+    if q_len_result.is_err() {
+        return Err("Can't parse question length.");
+    }
+
+    let q_len = q_len_result.unwrap();
+    if q_len < 4 && q_len > 64 {
+        return Err("Make sure you request question length such that 4 <= question_length <= 64.");
+    }
+
+    Ok((q_type_result.unwrap(), q_len))
 }
 
 #[test]
@@ -280,12 +355,11 @@ fn test_totp() {
 #[cfg(test)]
 mod ocra_tests {
     use ocra;
-    use crypto::sha1::Sha1;
-    use crypto::digest::Digest;
 
+    static NULL: &[u8] = &[];
     static STANDARD_KEY_20: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30];
-    static _STANDARD_KEY_32: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+    static STANDARD_KEY_32: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32];
@@ -300,6 +374,9 @@ mod ocra_tests {
                                     0xa3, 0x90, 0xb0, 0xa5, 0x72, 0xac, 0x0d, 0x2c, 0x02, 0x20];
     #[test]
     fn sha1_pin_correct() {
+        use crypto::sha1::Sha1;
+        use crypto::digest::Digest;
+
         let mut sha: Sha1 = Sha1::new();
         sha.input_str("1234");
 
@@ -312,31 +389,55 @@ mod ocra_tests {
     #[test]
     fn test_ocra_20byte_sha1() {
         let suite = "OCRA-1:HOTP-SHA1-6:QN08";
-        let null = [];
+
         // Test values from RFC 6287
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "00000000", &null, &null, &null), Ok(237653));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "11111111", &null, &null, &null), Ok(243178));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "22222222", &null, &null, &null), Ok(653583));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "33333333", &null, &null, &null), Ok(740991));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "44444444", &null, &null, &null), Ok(608993));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "55555555", &null, &null, &null), Ok(388898));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "66666666", &null, &null, &null), Ok(816933));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "77777777", &null, &null, &null), Ok(224598));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "88888888", &null, &null, &null), Ok(750600));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "99999999", &null, &null, &null), Ok(294470));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "00000000", NULL, NULL, NULL), Ok(237653));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "11111111", NULL, NULL, NULL), Ok(243178));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "22222222", NULL, NULL, NULL), Ok(653583));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "33333333", NULL, NULL, NULL), Ok(740991));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "44444444", NULL, NULL, NULL), Ok(608993));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "55555555", NULL, NULL, NULL), Ok(388898));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "66666666", NULL, NULL, NULL), Ok(816933));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "77777777", NULL, NULL, NULL), Ok(224598));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "88888888", NULL, NULL, NULL), Ok(750600));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "99999999", NULL, NULL, NULL), Ok(294470));
 
         // Values, generated from original Java source
         let suite2 = "OCRA-1:HOTP-SHA1-6:QH07";
-        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "153158E", &null, &null, &null), Ok(347935));
-        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "ABC1DEF", &null, &null, &null), Ok(857750));
+        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "153158E", NULL, NULL, NULL), Ok(347935));
+        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "ABC1DEF", NULL, NULL, NULL), Ok(857750));
 
         let suite3 = "OCRA-1:HOTP-SHA1-6:QH08";
-        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "F153158E", &null, &null, &null), Ok(004133));
-        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "ABC10DEF", &null, &null, &null), Ok(277962));
+        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "F153158E", NULL, NULL, NULL), Ok(004133));
+        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "ABC10DEF", NULL, NULL, NULL), Ok(277962));
 
         // My values. Could be wrong.
         let suite4 = "OCRA-1:HOTP-SHA1-6:QA31";
-        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Thanks avacariu for a nice lib!", &null, &null, &null), Ok(044742));
-        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Hope to see it in crates.io  :)", &null, &null, &null), Ok(516968));
+        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Thanks avacariu for a nice lib!", NULL, NULL, NULL), Ok(044742));
+        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Hope to see it in crates.io  :)", NULL, NULL, NULL), Ok(516968));
+    }
+
+    #[test]
+    fn test_ocra_32byte_sha256() {
+        let suite_c = "OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1";
+        let suite   = "OCRA-1:HOTP-SHA256-8:QN08-PSHA1";
+
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 0, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(65347737));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 1, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(86775851));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 2, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(78192410));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 3, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(71565254));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 4, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(10104329));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 5, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(65983500));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 6, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(70069104));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 7, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(91771096));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 8, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(75011558));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 9, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(08522129));
+
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "00000000", PIN_1234_SHA1, NULL, NULL), Ok(83238735));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "11111111", PIN_1234_SHA1, NULL, NULL), Ok(01501458));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "22222222", PIN_1234_SHA1, NULL, NULL), Ok(17957585));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "33333333", PIN_1234_SHA1, NULL, NULL), Ok(86776967));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "44444444", PIN_1234_SHA1, NULL, NULL), Ok(86807031));
+
     }
 }
