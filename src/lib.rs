@@ -176,7 +176,9 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
     } else {
         return Err("No question parameter specified or question length is 0.");
     }
-    message.extend_from_slice(password);
+    if hashed_pin_len > 0 {
+        message.extend_from_slice(password);
+    }
 
     let result: u64 = match hotp_sha_type {
         SType::SHA1 => hotp_custom(key, message.as_slice(), num_of_digits, Sha1::new()),
@@ -363,7 +365,7 @@ mod ocra_tests {
                                       0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32];
-    static _STANDARD_KEY_64: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+    static STANDARD_KEY_64: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
                                       0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
@@ -422,6 +424,7 @@ mod ocra_tests {
         let suite_c = "OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1";
         let suite   = "OCRA-1:HOTP-SHA256-8:QN08-PSHA1";
 
+        // Test values from RFC 6287
         assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 0, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(65347737));
         assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 1, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(86775851));
         assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 2, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(78192410));
@@ -438,6 +441,40 @@ mod ocra_tests {
         assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "22222222", PIN_1234_SHA1, NULL, NULL), Ok(17957585));
         assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "33333333", PIN_1234_SHA1, NULL, NULL), Ok(86776967));
         assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "44444444", PIN_1234_SHA1, NULL, NULL), Ok(86807031));
+    }
 
+    #[test]
+    fn test_ocra_64byte_sha512() {
+        let suite = "OCRA-1:HOTP-SHA512-8:C-QN08";
+
+        // Test values from RFC 6287
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "00000000", NULL, NULL, NULL), Ok(07016083));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 1, "11111111", NULL, NULL, NULL), Ok(63947962));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 2, "22222222", NULL, NULL, NULL), Ok(70123924));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 3, "33333333", NULL, NULL, NULL), Ok(25341727));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 4, "44444444", NULL, NULL, NULL), Ok(33203315));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 5, "55555555", NULL, NULL, NULL), Ok(34205738));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 6, "66666666", NULL, NULL, NULL), Ok(44343969));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 7, "77777777", NULL, NULL, NULL), Ok(51946085));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 8, "88888888", NULL, NULL, NULL), Ok(20403879));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 9, "99999999", NULL, NULL, NULL), Ok(31409299));
+
+        // Pin must be ignored due to suite settings
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "00000000", PIN_1234_SHA1, NULL, NULL), Ok(07016083));
+    }
+
+    #[test]
+    #[ignore]   // Not implemented
+    fn test_ocra_64byte_sha512_t() {
+        let suite = "OCRA-1:HOTP-SHA512-8:QN08-T1M";
+        let t = &[0x01, 0x32, 0xd0, 0xb6];
+
+        // Test values from RFC 6287
+        // Counter must be ignored.
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 55, "00000000", NULL, NULL, t), Ok(95209754));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 62, "11111111", NULL, NULL, t), Ok(55907591));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 18, "22222222", NULL, NULL, t), Ok(22048402));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 26, "33333333", NULL, NULL, t), Ok(24218844));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 99, "44444444", NULL, NULL, t), Ok(36209546));
     }
 }
