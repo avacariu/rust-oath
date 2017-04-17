@@ -9,12 +9,12 @@ Implemented:
 * HOTP ([RFC 4226](http://tools.ietf.org/html/rfc4226))
 * TOTP ([RFC 6238](http://tools.ietf.org/html/rfc6238))
 
-Planned:
+Ongoing:
 
 * OCRA ([RFC 6287](https://tools.ietf.org/html/rfc6287))
 
-**NOTE:** SHA2 doesn't work. Only SHA1 works. Why? I haven't been able to
-figure that out. It might be an issue in the `rust-crypto` library, but I
+**NOTE:** SHA2 doesn't work for TOTP and HOTP. Only SHA1 works. Why? I haven't been
+able to figure that out. It might be an issue in the `rust-crypto` library, but I
 haven't been able to spot it. Digests are used interchangeably in my code, same
 as in the `rust-crypto` HMAC code, so I don't know what's going on.
 
@@ -43,6 +43,26 @@ All the times below are in seconds.
     totp_raw(b"\xff", 6, 0, 30);
     // totp_custom(key, digits, epoch, time_step, current_time, hash)
     totp_custom(b"\xff", 6, 0, 30, 255, Sha1::new());
+
+### OCRA
+
+    NULL: &[u8] = &[];
+    STANDARD_KEY_20: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                               0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30];
+    STANDARD_KEY_32: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                               0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                               0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
+                               0x31, 0x32];
+    PIN_1234_SHA1: &[u8] = &[0x71, 0x10, 0xed, 0xa4, 0xd0, 0x9e, 0x06, 0x2a, 0xa5, 0xe4,
+                             0xa3, 0x90, 0xb0, 0xa5, 0x72, 0xac, 0x0d, 0x2c, 0x02, 0x20];
+
+    let suite = "OCRA-1:HOTP-SHA1-6:QN08";
+    let result = ocra(&suite, &STANDARD_KEY_20, 0, "00000000", NULL, NULL, NULL)
+    assert_eq!(result, Ok(237653));
+    // Attention! PIN must be already hashed!
+    let suite_c = "OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1";
+    let result_c = ocra(&suite_c, &STANDARD_KEY_32, 8, "12345678", PIN_1234_SHA1, NULL, NULL);
+    assert_eq!(result_c, Ok(75011558));
 
 ### Google Authenticator
 
