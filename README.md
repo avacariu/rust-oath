@@ -1,4 +1,4 @@
-# rust-oath [![Build Status](https://travis-ci.org/vlad003/rust-oath.svg)](https://travis-ci.org/vlad003/rust-oath)
+# rust-oath [![Build Status](https://travis-ci.org/crypto-universe/rust-oath.svg?branch=master)](https://travis-ci.org/crypto-universe/rust-oath)
 
 
 This library aims to provide implementations of HOTP, TOTP, and OCRA as
