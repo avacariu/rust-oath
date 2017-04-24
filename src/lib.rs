@@ -88,7 +88,7 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
 }
 
 pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
-        password: &[u8], session_info: &[u8], _timestamp: &[u8]) -> Result<u64, &'a str> {
+        password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, &'a str> {
     let parsed_suite: Vec<&str> = suite.split(':').collect();
     if (parsed_suite.len() != 3) || (parsed_suite[0].to_uppercase() != "OCRA-1") {
         return Err("Malformed suite string.");
@@ -122,9 +122,11 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
     let mut counter_len:      usize = 0;
     let mut hashed_pin_len:   usize = 0;
     let mut session_info_len: usize = 0;
+    let mut timestamp_len:    usize = 0;
 
     let mut parsed_question_type: (QType, usize) = (QType::N, 0);
     let mut parsed_pin_sha_type: (SType, usize);
+    let mut timestamp_parsed: u64 = 0;
 
     for p in data_input {
         let setting: &[u8] = p.as_bytes();
@@ -161,11 +163,20 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
                     Err(_)    => return Err("Wrong session info parameter."),
                 };
             },
+            b't' | b'T' => {
+                match parse_timestamp_format(p) {
+                    Ok(value) => {
+                        timestamp_parsed = timestamp / (value as u64);
+                        timestamp_len = 8;
+                    },
+                    Err(_) => return Err("Wrong timestamp parameter."),
+                };
+            },
             _ => return Err("Unknown parameter."),
         }
     }
 
-    let full_message_len = suite.len() + 1 + counter_len + question_len + hashed_pin_len + session_info_len;
+    let full_message_len = suite.len() + 1 + counter_len + question_len + hashed_pin_len + session_info_len + timestamp_len;
     let mut current_message_len = suite.len() + 1;
 
     let mut message: Vec<u8> = Vec::with_capacity(full_message_len);
@@ -197,7 +208,13 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
         let real_len = session_info.len();
         message.resize(current_message_len + session_info_len - real_len, 0);
         message.extend_from_slice(session_info);
-        current_message_len += session_info_len;
+        //current_message_len += session_info_len;
+    }
+    if timestamp_len > 0 {
+        let timestamp_parsed_be = timestamp_parsed.to_be();
+        let timestamp_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&timestamp_parsed_be as *const u64 as *const u8, 8) };
+        message.extend_from_slice(timestamp_ptr);
+        //current_message_len += timestamp_len;
     }
 
     let result: u64 = match hotp_sha_type {
@@ -218,6 +235,25 @@ fn parse_session_info_len(session_info: &str) -> Result<usize, &str> {
         "512" => Ok(512),
         _     => Err("Wrong session info length. Possible values: 064, 128, 256, 512"),
     }
+}
+
+// To get timestamp for OCRA, divide current UTC time by this coefficient
+fn parse_timestamp_format(timestamp: &str) -> Result<usize, &str> {
+    let (_, time_step) = timestamp.split_at(1);
+    let (num_s, time_type) = time_step.split_at(time_step.len()-1);
+    let num = num_s.parse::<usize>().unwrap_or(0);
+    if num < 1 || num > 59 {
+        return Err("Wrong timestamp value.");
+    }
+    let coefficient: usize;
+    match time_type {
+        "S" => coefficient = num * 1000,
+        "M" => coefficient = num * 1000 * 60,
+        "H" => coefficient = num * 1000 * 60 * 60,
+        _ => return Err("Can't parse timestamp. S/M/H time intervals are supported."),
+    }
+
+    return Ok(coefficient);
 }
 
 enum SType {SHA1, SHA256, SHA512}
@@ -424,30 +460,30 @@ mod ocra_tests {
         let suite = "OCRA-1:HOTP-SHA1-6:QN08";
 
         // Test values from RFC 6287
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "00000000", NULL, NULL, NULL), Ok(237653));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "11111111", NULL, NULL, NULL), Ok(243178));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "22222222", NULL, NULL, NULL), Ok(653583));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "33333333", NULL, NULL, NULL), Ok(740991));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "44444444", NULL, NULL, NULL), Ok(608993));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "55555555", NULL, NULL, NULL), Ok(388898));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "66666666", NULL, NULL, NULL), Ok(816933));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "77777777", NULL, NULL, NULL), Ok(224598));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "88888888", NULL, NULL, NULL), Ok(750600));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "99999999", NULL, NULL, NULL), Ok(294470));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "00000000", NULL, NULL, 0), Ok(237653));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "11111111", NULL, NULL, 0), Ok(243178));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "22222222", NULL, NULL, 0), Ok(653583));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "33333333", NULL, NULL, 0), Ok(740991));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "44444444", NULL, NULL, 0), Ok(608993));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "55555555", NULL, NULL, 0), Ok(388898));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "66666666", NULL, NULL, 0), Ok(816933));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "77777777", NULL, NULL, 0), Ok(224598));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "88888888", NULL, NULL, 0), Ok(750600));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_20, 0, "99999999", NULL, NULL, 0), Ok(294470));
 
         // Values, generated from original Java source
         let suite2 = "OCRA-1:HOTP-SHA1-6:QH07";
-        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "153158E", NULL, NULL, NULL), Ok(347935));
-        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "ABC1DEF", NULL, NULL, NULL), Ok(857750));
+        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "153158E", NULL, NULL, 0), Ok(347935));
+        assert_eq!(ocra(&suite2, &STANDARD_KEY_20, 0, "ABC1DEF", NULL, NULL, 0), Ok(857750));
 
         let suite3 = "OCRA-1:HOTP-SHA1-6:QH08";
-        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "F153158E", NULL, NULL, NULL), Ok(004133));
-        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "ABC10DEF", NULL, NULL, NULL), Ok(277962));
+        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "F153158E", NULL, NULL, 0), Ok(004133));
+        assert_eq!(ocra(&suite3, &STANDARD_KEY_20, 0, "ABC10DEF", NULL, NULL, 0), Ok(277962));
 
         // My values. Could be wrong.
         let suite4 = "OCRA-1:HOTP-SHA1-6:QA31";
-        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Thanks avacariu for a nice lib!", NULL, NULL, NULL), Ok(044742));
-        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Hope to see it in crates.io  :)", NULL, NULL, NULL), Ok(516968));
+        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Thanks avacariu for a nice lib!", NULL, NULL, 0), Ok(044742));
+        assert_eq!(ocra(&suite4, &STANDARD_KEY_20, 0, "Hope to see it in crates.io  :)", NULL, NULL, 0), Ok(516968));
     }
 
     #[test]
@@ -456,22 +492,22 @@ mod ocra_tests {
         let suite   = "OCRA-1:HOTP-SHA256-8:QN08-PSHA1";
 
         // Test values from RFC 6287
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 0, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(65347737));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 1, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(86775851));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 2, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(78192410));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 3, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(71565254));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 4, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(10104329));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 5, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(65983500));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 6, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(70069104));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 7, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(91771096));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 8, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(75011558));
-        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 9, "12345678", PIN_1234_SHA1, NULL, NULL), Ok(08522129));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 0, "12345678", PIN_1234_SHA1, NULL, 0), Ok(65347737));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 1, "12345678", PIN_1234_SHA1, NULL, 0), Ok(86775851));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 2, "12345678", PIN_1234_SHA1, NULL, 0), Ok(78192410));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 3, "12345678", PIN_1234_SHA1, NULL, 0), Ok(71565254));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 4, "12345678", PIN_1234_SHA1, NULL, 0), Ok(10104329));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 5, "12345678", PIN_1234_SHA1, NULL, 0), Ok(65983500));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 6, "12345678", PIN_1234_SHA1, NULL, 0), Ok(70069104));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 7, "12345678", PIN_1234_SHA1, NULL, 0), Ok(91771096));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 8, "12345678", PIN_1234_SHA1, NULL, 0), Ok(75011558));
+        assert_eq!(ocra(&suite_c, &STANDARD_KEY_32, 9, "12345678", PIN_1234_SHA1, NULL, 0), Ok(08522129));
 
-        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "00000000", PIN_1234_SHA1, NULL, NULL), Ok(83238735));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "11111111", PIN_1234_SHA1, NULL, NULL), Ok(01501458));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "22222222", PIN_1234_SHA1, NULL, NULL), Ok(17957585));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "33333333", PIN_1234_SHA1, NULL, NULL), Ok(86776967));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "44444444", PIN_1234_SHA1, NULL, NULL), Ok(86807031));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "00000000", PIN_1234_SHA1, NULL, 0), Ok(83238735));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "11111111", PIN_1234_SHA1, NULL, 0), Ok(01501458));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "22222222", PIN_1234_SHA1, NULL, 0), Ok(17957585));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "33333333", PIN_1234_SHA1, NULL, 0), Ok(86776967));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "44444444", PIN_1234_SHA1, NULL, 0), Ok(86807031));
     }
 
     #[test]
@@ -479,26 +515,26 @@ mod ocra_tests {
         let suite = "OCRA-1:HOTP-SHA512-8:C-QN08";
 
         // Test values from RFC 6287
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "00000000", NULL, NULL, NULL), Ok(07016083));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 1, "11111111", NULL, NULL, NULL), Ok(63947962));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 2, "22222222", NULL, NULL, NULL), Ok(70123924));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 3, "33333333", NULL, NULL, NULL), Ok(25341727));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 4, "44444444", NULL, NULL, NULL), Ok(33203315));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 5, "55555555", NULL, NULL, NULL), Ok(34205738));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 6, "66666666", NULL, NULL, NULL), Ok(44343969));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 7, "77777777", NULL, NULL, NULL), Ok(51946085));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 8, "88888888", NULL, NULL, NULL), Ok(20403879));
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 9, "99999999", NULL, NULL, NULL), Ok(31409299));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "00000000", NULL, NULL, 0), Ok(07016083));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 1, "11111111", NULL, NULL, 0), Ok(63947962));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 2, "22222222", NULL, NULL, 0), Ok(70123924));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 3, "33333333", NULL, NULL, 0), Ok(25341727));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 4, "44444444", NULL, NULL, 0), Ok(33203315));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 5, "55555555", NULL, NULL, 0), Ok(34205738));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 6, "66666666", NULL, NULL, 0), Ok(44343969));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 7, "77777777", NULL, NULL, 0), Ok(51946085));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 8, "88888888", NULL, NULL, 0), Ok(20403879));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 9, "99999999", NULL, NULL, 0), Ok(31409299));
 
         // Pin must be ignored due to suite settings
-        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "00000000", PIN_1234_SHA1, NULL, NULL), Ok(07016083));
+        assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "00000000", PIN_1234_SHA1, NULL, 0), Ok(07016083));
     }
 
     #[test]
-    #[ignore]   // Not implemented
     fn test_ocra_64byte_sha512_t() {
         let suite = "OCRA-1:HOTP-SHA512-8:QN08-T1M";
-        let t = &[0x01, 0x32, 0xd0, 0xb6];
+        // "132d0b6" from RFC with 1M step
+        let t = 0x132d0b6 * 1000 * 60;  // 1_206_446_760_000
 
         // Test values from RFC 6287
         // Counter must be ignored.
