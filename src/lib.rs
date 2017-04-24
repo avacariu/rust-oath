@@ -247,9 +247,9 @@ fn parse_timestamp_format(timestamp: &str) -> Result<usize, &str> {
     }
     let coefficient: usize;
     match time_type {
-        "S" => coefficient = num * 1000,
-        "M" => coefficient = num * 1000 * 60,
-        "H" => coefficient = num * 1000 * 60 * 60,
+        "S" => coefficient = num,
+        "M" => coefficient = num * 60,
+        "H" => coefficient = num * 60 * 60,
         _ => return Err("Can't parse timestamp. S/M/H time intervals are supported."),
     }
 
@@ -534,7 +534,7 @@ mod ocra_tests {
     fn test_ocra_64byte_sha512_t() {
         let suite = "OCRA-1:HOTP-SHA512-8:QN08-T1M";
         // "132d0b6" from RFC with 1M step
-        let t = 0x132d0b6 * 1000 * 60;  // 1_206_446_760_000
+        let t = 0x132d0b6 * 60;  // 1_206_446_760
 
         // Test values from RFC 6287
         // Counter must be ignored.
