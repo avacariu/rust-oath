@@ -88,7 +88,7 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
 }
 
 pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
-        password: &[u8], _session_info: &[u8], _timestamp: &[u8]) -> Result<u64, &'a str> {
+        password: &[u8], session_info: &[u8], _timestamp: &[u8]) -> Result<u64, &'a str> {
     let parsed_suite: Vec<&str> = suite.split(':').collect();
     if (parsed_suite.len() != 3) || (parsed_suite[0].to_uppercase() != "OCRA-1") {
         return Err("Malformed suite string.");
@@ -118,9 +118,10 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
 
     let data_input: Vec<&str> = parsed_suite[2].split('-').collect();
     // Counters
-    let     question_len:   usize = 128;
-    let mut counter_len:    usize = 0;
-    let mut hashed_pin_len: usize = 0;
+    let     question_len:     usize = 128;
+    let mut counter_len:      usize = 0;
+    let mut hashed_pin_len:   usize = 0;
+    let mut session_info_len: usize = 0;
 
     let mut parsed_question_type: (QType, usize) = (QType::N, 0);
     let mut parsed_pin_sha_type: (SType, usize);
@@ -144,6 +145,8 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
                 match parse_pin_sha_type(p) {
                     Ok(expr) => {
                         parsed_pin_sha_type = expr;
+                        // Here we don't care about hash type
+                        // because pin already must be hashed.
                         hashed_pin_len = parsed_pin_sha_type.1;
                         if password.len() != hashed_pin_len {
                             return Err("Wrong hashed password length.");
@@ -152,12 +155,18 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
                     Err(_) => return Err("Can't parse hash."),
                 };
             },
+            b's' | b'S' => {
+                match parse_session_info_len(p) {
+                    Ok(value) => session_info_len = value,
+                    Err(_)    => return Err("Wrong session info parameter."),
+                };
+            },
             _ => return Err("Unknown parameter."),
         }
     }
 
-    let full_message_len = suite.len() + 1 + counter_len + question_len + hashed_pin_len;
-    let message_len_for_resizing = suite.len() + 1 + counter_len + question_len;
+    let full_message_len = suite.len() + 1 + counter_len + question_len + hashed_pin_len + session_info_len;
+    let mut current_message_len = suite.len() + 1;
 
     let mut message: Vec<u8> = Vec::with_capacity(full_message_len);
     message.extend_from_slice(suite.as_bytes());
@@ -166,11 +175,15 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
         let counter_be = counter.to_be();
         let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&counter_be as *const u64 as *const u8, 8) };
         message.extend_from_slice(msg_ptr);
+        current_message_len += counter_len;
     }
     if parsed_question_type.1 != 0 {
         let push_result = push_correct_question(&mut message, parsed_question_type, question);
         match push_result {
-            Ok(_) => message.resize(message_len_for_resizing, 0),
+            Ok(_) => {
+                current_message_len += question_len;
+                message.resize(current_message_len, 0)
+            },
             Err(err_str) => return Err(err_str),
         }
     } else {
@@ -178,6 +191,13 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
     }
     if hashed_pin_len > 0 {
         message.extend_from_slice(password);
+        current_message_len += hashed_pin_len;
+    }
+    if session_info_len > 0 {
+        let real_len = session_info.len();
+        message.resize(current_message_len + session_info_len - real_len, 0);
+        message.extend_from_slice(session_info);
+        current_message_len += session_info_len;
     }
 
     let result: u64 = match hotp_sha_type {
@@ -187,6 +207,17 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
     };
 
     Ok(result)
+}
+
+fn parse_session_info_len(session_info: &str) -> Result<usize, &str> {
+    let (_, num) = session_info.split_at(1);
+    match num {
+        "064" => Ok(64),
+        "128" => Ok(128),
+        "256" => Ok(256),
+        "512" => Ok(512),
+        _     => Err("Wrong session info length. Possible values: 064, 128, 256, 512"),
+    }
 }
 
 enum SType {SHA1, SHA256, SHA512}
