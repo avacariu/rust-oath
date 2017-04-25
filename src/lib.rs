@@ -249,7 +249,13 @@ fn parse_timestamp_format(timestamp: &str) -> Result<usize, &str> {
     match time_type {
         "S" => coefficient = num,
         "M" => coefficient = num * 60,
-        "H" => coefficient = num * 60 * 60,
+        "H" => {
+            if num < 49 {
+                coefficient = num * 60 * 60;
+            } else {
+                return Err("Time interval is too big. Use H <= 48");
+            }
+        },
         _ => return Err("Can't parse timestamp. S/M/H time intervals are supported."),
     }
 
