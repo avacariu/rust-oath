@@ -172,3 +172,64 @@ fn test_ocra_64byte_sha512_t() {
     assert_eq!(ocra(&suite, &STANDARD_KEY_64, 26, "33333333", NULL, NULL, t), Ok(24218844));
     assert_eq!(ocra(&suite, &STANDARD_KEY_64, 99, "44444444", NULL, NULL, t), Ok(36209546));
 }
+
+#[test]
+#[ignore]   // Not implemented
+fn test_ocra_32byte_sha256_mutual() {
+    let server_suite = "OCRA-1:HOTP-SHA256-8:QA08";
+    let client_suite = "OCRA-1:HOTP-SHA256-8:QA08";
+
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_32, 0, "CLI22220SRV11110", NULL, NULL, 0), Ok(28247970));
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_32, 0, "CLI22221SRV11111", NULL, NULL, 0), Ok(01984843));
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_32, 0, "CLI22222SRV11112", NULL, NULL, 0), Ok(65387857));
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_32, 0, "CLI22223SRV11113", NULL, NULL, 0), Ok(03351211));
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_32, 0, "CLI22224SRV11114", NULL, NULL, 0), Ok(83412541));
+
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_32, 0, "SRV11110CLI22220", NULL, NULL, 0), Ok(15510767));
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_32, 0, "SRV11111CLI22221", NULL, NULL, 0), Ok(90175646));
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_32, 0, "SRV11112CLI22222", NULL, NULL, 0), Ok(33777207));
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_32, 0, "SRV11113CLI22223", NULL, NULL, 0), Ok(95285278));
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_32, 0, "SRV11114CLI22224", NULL, NULL, 0), Ok(28934924));
+}
+
+#[test]
+#[ignore]   // Not implemented
+fn test_ocra_64byte_sha512_mutual() {
+    let server_suite = "OCRA-1:HOTP-SHA512-8:QA08";
+    let client_suite = "OCRA-1:HOTP-SHA512-8:QA08-PSHA1";
+
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_64, 0, "CLI22220SRV11110", NULL, NULL, 0), Ok(79496648));
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_64, 0, "CLI22221SRV11111", NULL, NULL, 0), Ok(76831980));
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_64, 0, "CLI22222SRV11112", NULL, NULL, 0), Ok(12250499));
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_64, 0, "CLI22223SRV11113", NULL, NULL, 0), Ok(90856481));
+    assert_eq!(ocra(&server_suite, &STANDARD_KEY_64, 0, "CLI22224SRV11114", NULL, NULL, 0), Ok(12761449));
+
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_64, 0, "SRV11110CLI22220", PIN_1234_SHA1, NULL, 0), Ok(18806276));
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_64, 0, "SRV11111CLI22221", PIN_1234_SHA1, NULL, 0), Ok(70020315));
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_64, 0, "SRV11112CLI22222", PIN_1234_SHA1, NULL, 0), Ok(01600026));
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_64, 0, "SRV11113CLI22223", PIN_1234_SHA1, NULL, 0), Ok(18951020));
+    assert_eq!(ocra(&client_suite, &STANDARD_KEY_64, 0, "SRV11114CLI22224", PIN_1234_SHA1, NULL, 0), Ok(32528969));
+}
+
+#[test]
+fn test_ocra_32byte_sha256_signature() {
+    let suite = "OCRA-1:HOTP-SHA256-8:QA08";
+
+    assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "SIG10000", NULL, NULL, 0), Ok(53095496));
+    assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "SIG11000", NULL, NULL, 0), Ok(04110475));
+    assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "SIG12000", NULL, NULL, 0), Ok(31331128));
+    assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "SIG13000", NULL, NULL, 0), Ok(76028668));
+    assert_eq!(ocra(&suite, &STANDARD_KEY_32, 0, "SIG14000", NULL, NULL, 0), Ok(46554205));
+}
+
+#[test]
+fn test_ocra_64byte_sha512_signature_t() {
+    let suite = "OCRA-1:HOTP-SHA512-8:QA10-T1M";
+    let timestamp = 0x132d0b6 * 60;  // Timestamp from RFC with 1 minute coefficient
+
+    assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "SIG1000000", NULL, NULL, timestamp), Ok(77537423));
+    assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "SIG1100000", NULL, NULL, timestamp), Ok(31970405));
+    assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "SIG1200000", NULL, NULL, timestamp), Ok(10235557));
+    assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "SIG1300000", NULL, NULL, timestamp), Ok(95213541));
+    assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "SIG1400000", NULL, NULL, timestamp), Ok(65360607));
+}
