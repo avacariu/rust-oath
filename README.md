@@ -13,6 +13,12 @@ Ongoing:
 
 * OCRA ([RFC 6287](https://tools.ietf.org/html/rfc6287))
 
+**WARNING** While [ieee754 is broken](https://github.com/rust-lang/rust/issues/41793),
+[RAMP](https://crates.io/crates/ramp) fails to compile.
+OCRA numeric question mode can't use long Int, it is forced to use u64 instead.
+This data type leads us to question length limitation: 19 symbols. Number must fit u64.
+For default challenge format (N08) it is more that enough.
+
 **NOTE:** SHA2 doesn't work for TOTP and HOTP. Only SHA1 works. Why? I haven't been
 able to figure that out. It might be an issue in the `rust-crypto` library, but I
 haven't been able to spot it. Digests are used interchangeably in my code, same

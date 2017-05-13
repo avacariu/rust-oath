@@ -1,7 +1,7 @@
 extern crate crypto;
 extern crate rustc_serialize;
 extern crate time;
-extern crate ramp;
+//extern crate ramp;
 
 use crypto::sha1::Sha1;
 use crypto::sha2::Sha256;
@@ -12,8 +12,8 @@ use crypto::digest::Digest;
 use rustc_serialize::hex::FromHex;
 use rustc_serialize::hex::ToHex;
 use std::io::Write as Write_io;
-use std::fmt::Write as Write_fmt;
-use ramp::Int;
+//use std::fmt::Write as Write_fmt;
+//use ramp::Int;
 
 mod oathtest;
 
@@ -289,6 +289,20 @@ fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), ques
             message.append(hex_encoded.by_ref());
         },
         QType::N => {
+            // While RAMP is broken, let's assume, that question numbers will be short
+            if question.len() > 19 {
+                // That is the max number len for u64
+                assert!(false, "Temporary limitation question.len() < 20 is exceeded.");
+            }
+            let q_as_u64: u64 = question.parse::<u64>().unwrap();
+            let mut q_as_hex_str: String = format!("{:X}", q_as_u64);
+            if q_as_hex_str.len() % 2 == 1 {
+                q_as_hex_str.push('0');
+            }
+            message.append(from_hex(q_as_hex_str.as_str()).unwrap().by_ref());
+
+
+            /*  See https://github.com/rust-lang/rust/issues/41793
             let q_as_int: Int = Int::from_str_radix(question, 10).expect("Can't parse your numeric question.");
             let sign = q_as_int.sign();
             if sign == -1 {
@@ -321,8 +335,7 @@ fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), ques
                     },
                     Err(_) => return Err("Unexpected error. Can't write to buffer."),
                 }
-
-            }
+            }*/
         },
         QType::H => {
             if q_length % 2 == 0 {
