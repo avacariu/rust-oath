@@ -174,7 +174,6 @@ fn test_ocra_64byte_sha512_t() {
 }
 
 #[test]
-#[ignore]   // Not implemented
 fn test_ocra_32byte_sha256_mutual() {
     let server_suite = "OCRA-1:HOTP-SHA256-8:QA08";
     let client_suite = "OCRA-1:HOTP-SHA256-8:QA08";
@@ -193,7 +192,6 @@ fn test_ocra_32byte_sha256_mutual() {
 }
 
 #[test]
-#[ignore]   // Not implemented
 fn test_ocra_64byte_sha512_mutual() {
     let server_suite = "OCRA-1:HOTP-SHA512-8:QA08";
     let client_suite = "OCRA-1:HOTP-SHA512-8:QA08-PSHA1";

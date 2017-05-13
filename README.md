@@ -8,9 +8,6 @@ Implemented:
 
 * HOTP ([RFC 4226](http://tools.ietf.org/html/rfc4226))
 * TOTP ([RFC 6238](http://tools.ietf.org/html/rfc6238))
-
-Ongoing:
-
 * OCRA ([RFC 6287](https://tools.ietf.org/html/rfc6287))
 
 **WARNING** While [ieee754 is broken](https://github.com/rust-lang/rust/issues/41793),
