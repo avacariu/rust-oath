@@ -231,3 +231,48 @@ fn test_ocra_64byte_sha512_signature_t() {
     assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "SIG1300000", NULL, NULL, timestamp), Ok(95213541));
     assert_eq!(ocra(&suite, &STANDARD_KEY_64, 0, "SIG1400000", NULL, NULL, timestamp), Ok(65360607));
 }
+
+#[test]
+fn negative_tests_ocra() {
+    assert_eq!(ocra("OCRA-2:HOTP-SHA512-8:QA10-T1M", &STANDARD_KEY_64, 0, "SIG1000000", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Malformed suite string.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA512-8:QA10:MORE", &STANDARD_KEY_64, 0, "SIG1000000", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Malformed suite string.");
+    assert_eq!(ocra("OCRA-1:SOTP-SHA512-8:QA10-T1M", &STANDARD_KEY_32, 0, "Question#1", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Only HOTP crypto function is supported. You requested SOTP.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1024-8:QN08", &STANDARD_KEY_32, 0, "12345678", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Unknown hash type. Supported: SHA1/SHA256/SHA512. Requested: SHA1024.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-3:QN08", &STANDARD_KEY_32, 0, "12345678", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Number of returned digits should satisfy: 4 <= num <= 10. You requested 3.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-11:QN08", &STANDARD_KEY_32, 0, "12345678", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Number of returned digits should satisfy: 4 <= num <= 10. You requested 11.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-8:QR08", &STANDARD_KEY_64, 0, "12345678", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "This question type is not supported! Use A/N/H, please. Can't parse question QR08.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-8:QN0F", &STANDARD_KEY_64, 0, "12345678", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Can't parse question length. Can't parse question QN0F.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-8:QN03", &STANDARD_KEY_64, 0, "123", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Make sure you request question length such that 4 <= question_length <= 64. Can't parse question QN03.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA256-6:QN65", &STANDARD_KEY_64, 0, "1234567890", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Make sure you request question length such that 4 <= question_length <= 64. Can't parse question QN65.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA256-8:QN08-PMD5", &STANDARD_KEY_32, 0, "11111111", PIN_1234_SHA1, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Unknown hashing algorithm. Can't parse hash PMD5.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA256-8:QN08-PSHA3", &STANDARD_KEY_32, 0, "11111111", PIN_1234_SHA1, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Unknown SHA hash mode. Can't parse hash PSHA3.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA256-8:QN08-PSHA256", &STANDARD_KEY_32, 0, "11111111", PIN_1234_SHA1, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Wrong hashed password length.");
+    // Session info parameter can be "064", not just "64"
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-8:QN08-S64", &STANDARD_KEY_32, 0, "11111111", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Wrong session info length. Possible values: 064, 128, 256, 512. Wrong session info parameter S64.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-8:QN08-T1D", &STANDARD_KEY_32, 0, "11111111", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Can't parse timestamp. S/M/H time intervals are supported. Wrong timestamp parameter T1D.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-8:QN08-T0M", &STANDARD_KEY_64, 0, "11111111", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Wrong timestamp value. Wrong timestamp parameter T0M.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-8:QN08-T60M", &STANDARD_KEY_32, 0, "22222222", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Wrong timestamp value. Wrong timestamp parameter T60M.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA1-8:QN08-T49H", &STANDARD_KEY_32, 0, "99999999", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Time interval is too big. Use H <= 48. Wrong timestamp parameter T49H.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA512-8:QN08-WD40", &STANDARD_KEY_32, 0, "12345678", NULL, NULL, 0).expect_err("Test failed!").as_str()
+                    , "Unknown parameter WD40.");
+    assert_eq!(ocra("OCRA-1:HOTP-SHA512-8:C-T2H", &STANDARD_KEY_32, 0, "12345678", NULL, NULL, 456).expect_err("Test failed!").as_str()
+                    , "No question parameter specified or question length is 0.");
+}

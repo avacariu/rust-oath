@@ -89,29 +89,29 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
     }
 }
 
-pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
-        password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, &'a str> {
+pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
+        password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, String> {
     let parsed_suite: Vec<&str> = suite.split(':').collect();
     if (parsed_suite.len() != 3) || (parsed_suite[0].to_uppercase() != "OCRA-1") {
-        return Err("Malformed suite string.");
+        return Err("Malformed suite string.".to_string());
     }
 
     let crypto_function: Vec<&str> = parsed_suite[1].split('-').collect();
     if crypto_function[0].to_uppercase() != "HOTP" {
-        return Err("Only HOTP crypto function is supported.");
+        return Err("Only HOTP crypto function is supported. You requested ".to_string() + crypto_function[0] + ".");
     }
 
     let hotp_sha_type: SType = match crypto_function[1].to_uppercase().as_str() {
         "SHA1" => SType::SHA1,
         "SHA256" => SType::SHA256,
         "SHA512" => SType::SHA512,
-        _ => return Err("Unknown hash type.")
+        _ => return Err("Unknown hash type. Supported: SHA1/SHA256/SHA512. Requested: ".to_string() + crypto_function[1] + "."),
     };
 
     let num_of_digits = if crypto_function.len() == 3 {
         let temp_num = crypto_function[2].parse().unwrap_or(0);
         if temp_num > 10 || temp_num < 4 {
-            return Err("Number of returned digits should satisfy: 4 <= num <= 10.");
+            return Err("Number of returned digits should satisfy: 4 <= num <= 10. You requested ".to_string() + crypto_function[2] + ".");
         }
         temp_num
     } else {
@@ -142,7 +142,7 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
                             return Err("Claimed and real question lengths are different.");
                         }*/
                     },
-                    Err(_) => return Err("Can't parse question."),
+                    Err(err_str) => return Err(err_str + " Can't parse question " + p + "."),
                 };
             },
             b'c' | b'C' => counter_len = 8,
@@ -154,16 +154,16 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
                         // because pin already must be hashed.
                         hashed_pin_len = parsed_pin_sha_type.1;
                         if password.len() != hashed_pin_len {
-                            return Err("Wrong hashed password length.");
+                            return Err("Wrong hashed password length.".to_string());
                         }
                     },
-                    Err(_) => return Err("Can't parse hash."),
+                    Err(err_str) => return Err(err_str + " Can't parse hash " + p + "."),
                 };
             },
             b's' | b'S' => {
                 match parse_session_info_len(p) {
                     Ok(value) => session_info_len = value,
-                    Err(_)    => return Err("Wrong session info parameter."),
+                    Err(err_str)    => return Err(err_str + " Wrong session info parameter " + p + "."),
                 };
             },
             b't' | b'T' => {
@@ -172,10 +172,10 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
                         timestamp_parsed = timestamp / (value as u64);
                         timestamp_len = 8;
                     },
-                    Err(_) => return Err("Wrong timestamp parameter."),
+                    Err(err_str) => return Err(err_str + " Wrong timestamp parameter " + p + "."),
                 };
             },
-            _ => return Err("Unknown parameter."),
+            _ => return Err("Unknown parameter ".to_string() + p + "."),
         }
     }
 
@@ -201,7 +201,7 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
             Err(err_str) => return Err(err_str),
         }
     } else {
-        return Err("No question parameter specified or question length is 0.");
+        return Err("No question parameter specified or question length is 0.".to_string());
     }
     if hashed_pin_len > 0 {
         message.extend_from_slice(password);
@@ -229,24 +229,24 @@ pub fn ocra<'a>(suite: &str, key: &[u8], counter: u64, question: &str,
     Ok(result)
 }
 
-fn parse_session_info_len(session_info: &str) -> Result<usize, &str> {
+fn parse_session_info_len(session_info: &str) -> Result<usize, String> {
     let (_, num) = session_info.split_at(1);
     match num {
         "064" => Ok(64),
         "128" => Ok(128),
         "256" => Ok(256),
         "512" => Ok(512),
-        _     => Err("Wrong session info length. Possible values: 064, 128, 256, 512"),
+        _     => Err("Wrong session info length. Possible values: 064, 128, 256, 512.".to_string()),
     }
 }
 
 // To get timestamp for OCRA, divide current UTC time by this coefficient
-fn parse_timestamp_format(timestamp: &str) -> Result<usize, &str> {
+fn parse_timestamp_format(timestamp: &str) -> Result<usize, String> {
     let (_, time_step) = timestamp.split_at(1);
     let (num_s, time_type) = time_step.split_at(time_step.len()-1);
     let num = num_s.parse::<usize>().unwrap_or(0);
     if num < 1 || num > 59 {
-        return Err("Wrong timestamp value.");
+        return Err("Wrong timestamp value.".to_string());
     }
     let coefficient: usize;
     match time_type {
@@ -256,17 +256,17 @@ fn parse_timestamp_format(timestamp: &str) -> Result<usize, &str> {
             if num < 49 {
                 coefficient = num * 60 * 60;
             } else {
-                return Err("Time interval is too big. Use H <= 48");
+                return Err("Time interval is too big. Use H <= 48.".to_string());
             }
         },
-        _ => return Err("Can't parse timestamp. S/M/H time intervals are supported."),
+        _ => return Err("Can't parse timestamp. S/M/H time intervals are supported.".to_string()),
     }
 
     return Ok(coefficient);
 }
 
 enum SType {SHA1, SHA256, SHA512}
-fn parse_pin_sha_type(psha: &str) -> Result<(SType, usize), &str> {
+fn parse_pin_sha_type(psha: &str) -> Result<(SType, usize), String> {
     let psha_local: String = psha.to_uppercase();
     if psha_local.starts_with("PSHA") {
         let (_, num) = psha_local.split_at(4);
@@ -274,14 +274,14 @@ fn parse_pin_sha_type(psha: &str) -> Result<(SType, usize), &str> {
             "1" => Ok((SType::SHA1, 20)),
             "256" => Ok((SType::SHA256, 32)),
             "512" => Ok((SType::SHA512, 64)),
-            _ => Err("Unknown SHA hash modification"),
+            _ => Err("Unknown SHA hash mode.".to_string()),
         }
     } else {
-        Err("Unknown hashing algorithm")
+        Err("Unknown hashing algorithm.".to_string())
     }
 }
 
-fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), question: &str) -> Result<(), &'a str> {
+fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), question: &str) -> Result<(), String> {
     let (q_type, q_length) = q_info;
     match q_type {
         QType::A => {
@@ -293,7 +293,7 @@ fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), ques
             // While RAMP is broken, let's assume, that question numbers will be short
             if question.len() > 19 {
                 // That is the max number len for u64
-                assert!(false, "Temporary limitation question.len() < 20 is exceeded.");
+                assert!(false, "Temporary limitation question.len() < 20 is exceeded.".to_string());
             }
             let q_as_u64: u64 = question.parse::<u64>().unwrap();
             let mut q_as_hex_str: String = format!("{:X}", q_as_u64);
@@ -307,7 +307,7 @@ fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), ques
             let q_as_int: Int = Int::from_str_radix(question, 10).expect("Can't parse your numeric question.");
             let sign = q_as_int.sign();
             if sign == -1 {
-                return Err("Question number can't be negative!");
+                return Err("Question number can't be negative.".to_string());
             }
             //Do nothing if sign == 0;
             if sign == 1 {
@@ -334,7 +334,7 @@ fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), ques
                         }
                         message.append(from_hex(q_as_hex.as_str()).unwrap().by_ref());
                     },
-                    Err(_) => return Err("Unexpected error. Can't write to buffer."),
+                    Err(_) => return Err("Unexpected error. Can't write to buffer.".to_string()),
                 }
             }*/
         },
@@ -354,31 +354,31 @@ fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), ques
 }
 
 enum QType {A, N, H}
-fn ocra_parse_question(question: &str) -> Result<(QType, usize), &str> {
+fn ocra_parse_question(question: &str) -> Result<(QType, usize), String> {
     assert_eq!(question.len(), 4);
     let (type_str, len_str) = question.split_at(2);
 
     let data: &[u8] = type_str.as_bytes();
     assert!(data[0] == b'Q' || data[0] == b'q');
-    let q_type_result: Result<QType, &str> = match data[1] {
+    let q_type_result: Result<QType, String> = match data[1] {
         b'a' | b'A' => Ok(QType::A),
         b'n' | b'N' => Ok(QType::N),
         b'h' | b'H' => Ok(QType::H),
-        _           => Err("This question type is not supported! Use A/N/H, please."),
+        _           => Err("This question type is not supported! Use A/N/H, please.".to_string()),
     };
 
     if q_type_result.is_err() {
-        return Err(q_type_result.err().unwrap());
+        return Err(q_type_result.err().unwrap().to_string());
     }
 
     let q_len_result = len_str.parse::<usize>();
     if q_len_result.is_err() {
-        return Err("Can't parse question length.");
+        return Err("Can't parse question length.".to_string());
     }
 
     let q_len = q_len_result.unwrap();
-    if q_len < 4 && q_len > 64 {
-        return Err("Make sure you request question length such that 4 <= question_length <= 64.");
+    if q_len < 4 || q_len > 64 {
+        return Err("Make sure you request question length such that 4 <= question_length <= 64.".to_string());
     }
 
     Ok((q_type_result.unwrap(), q_len))
