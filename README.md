@@ -16,11 +16,6 @@ OCRA numeric question mode can't use long Int, it is forced to use u64 instead.
 This data type leads us to question length limitation: 19 symbols. Number must fit u64.
 For default challenge format (N08) it is more that enough.
 
-**NOTE:** SHA2 doesn't work for TOTP and HOTP. Only SHA1 works. Why? I haven't been
-able to figure that out. It might be an issue in the `rust-crypto` library, but I
-haven't been able to spot it. Digests are used interchangeably in my code, same
-as in the `rust-crypto` HMAC code, so I don't know what's going on.
-
 **PRs are more than welcome!** I'm not using Rust much these days, so I don't
 notice if anything in this code breaks. If you send me a PR, I'll do my best to
 merge it quickly.

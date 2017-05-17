@@ -37,6 +37,10 @@ fn test_hotp() {
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
     assert_eq!(hotp_custom(b"\xff", &var_23_as_be_arr, 6, Sha1::new()), 330795);
     assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha1::new()), 330795);
+    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha256::new()), 225210);
+    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha1::new()), 7615146);
+    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha256::new()), 6447746);
+
     // test values from RFC 4226
     assert_eq!(hotp_raw(b"12345678901234567890", 0, 6), 755224);
     assert_eq!(hotp_raw(b"12345678901234567890", 1, 6), 287082);
@@ -48,39 +52,40 @@ fn test_hotp() {
     assert_eq!(hotp_raw(b"12345678901234567890", 7, 6), 162583);
     assert_eq!(hotp_raw(b"12345678901234567890", 8, 6), 399871);
     assert_eq!(hotp_raw(b"12345678901234567890", 9, 6), 520489);
-    //assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), 23, 6, Sha256::new()), 225210);
-    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha1::new()), 7615146);
-    //assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), 10, 7, Sha256::new()), 6447746);
 }
 
 #[test]
 fn test_totp() {
+    let seeds20 = b"12345678901234567890";
+    let seeds32 = b"12345678901234567890123456789012";
+    let seeds64 = b"1234567890123456789012345678901234567890123456789012345678901234";
+
     assert_eq!(totp_custom(b"\xff", 6, 0, 1, 23, Sha1::new()), 330795);
 
     // test values from RFC 6238
-    assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 59, Sha1::new()), 94287082);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 59, Sha256::new()), 46119246);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 59, Sha512::new()), 90693936);
+    assert_eq!(totp_custom(seeds20, 8, 0, 30, 59, Sha1::new()), 94287082);
+    assert_eq!(totp_custom(seeds32, 8, 0, 30, 59, Sha256::new()), 46119246);
+    assert_eq!(totp_custom(seeds64, 8, 0, 30, 59, Sha512::new()), 90693936);
 
-    assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1111111109, Sha1::new()), 07081804);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1111111109, Sha256::new()), 68084774);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1111111109, Sha512::new()), 25091201);
+    assert_eq!(totp_custom(seeds20, 8, 0, 30, 1111111109, Sha1::new()), 07081804);
+    assert_eq!(totp_custom(seeds32, 8, 0, 30, 1111111109, Sha256::new()), 68084774);
+    assert_eq!(totp_custom(seeds64, 8, 0, 30, 1111111109, Sha512::new()), 25091201);
 
-    assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1111111111, Sha1::new()), 14050471);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1111111111, Sha256::new()), 67062674);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1111111111, Sha512::new()), 99943326);
+    assert_eq!(totp_custom(seeds20, 8, 0, 30, 1111111111, Sha1::new()), 14050471);
+    assert_eq!(totp_custom(seeds32, 8, 0, 30, 1111111111, Sha256::new()), 67062674);
+    assert_eq!(totp_custom(seeds64, 8, 0, 30, 1111111111, Sha512::new()), 99943326);
 
-    assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1234567890, Sha1::new()), 89005924);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1234567890, Sha256::new()), 91819424);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 1234567890, Sha512::new()), 93441116);
+    assert_eq!(totp_custom(seeds20, 8, 0, 30, 1234567890, Sha1::new()), 89005924);
+    assert_eq!(totp_custom(seeds32, 8, 0, 30, 1234567890, Sha256::new()), 91819424);
+    assert_eq!(totp_custom(seeds64, 8, 0, 30, 1234567890, Sha512::new()), 93441116);
 
-    assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 2000000000, Sha1::new()), 69279037);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 2000000000, Sha256::new()), 90698825);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 2000000000, Sha512::new()), 38618901);
+    assert_eq!(totp_custom(seeds20, 8, 0, 30, 2000000000, Sha1::new()), 69279037);
+    assert_eq!(totp_custom(seeds32, 8, 0, 30, 2000000000, Sha256::new()), 90698825);
+    assert_eq!(totp_custom(seeds64, 8, 0, 30, 2000000000, Sha512::new()), 38618901);
 
-    assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 20000000000, Sha1::new()), 65353130);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 20000000000, Sha256::new()), 77737706);
-    //assert_eq!(totp_custom(b"12345678901234567890", 8, 0, 30, 20000000000, Sha512::new()), 47863826);
+    assert_eq!(totp_custom(seeds20, 8, 0, 30, 20000000000, Sha1::new()), 65353130);
+    assert_eq!(totp_custom(seeds32, 8, 0, 30, 20000000000, Sha256::new()), 77737706);
+    assert_eq!(totp_custom(seeds64, 8, 0, 30, 20000000000, Sha512::new()), 47863826);
 }
 
 #[test]

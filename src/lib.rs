@@ -158,7 +158,7 @@ pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
 pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
                               time_step: u64, current_time: u64,
                               hash: D) -> u64 {
-    let counter = (current_time - epoch) / time_step;
+    let counter: u64 = (current_time - epoch) / time_step;
     let message = counter.to_be();
     let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
     hotp_custom(key, msg_ptr, digits, hash)
