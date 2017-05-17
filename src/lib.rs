@@ -90,6 +90,11 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
 }
 
 pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
+        password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, ()> {
+    ocra_debug(suite, key, counter, question, password, session_info, timestamp).or(Err(()))
+}
+
+pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
         password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, String> {
     let parsed_suite: Vec<&str> = suite.split(':').collect();
     if (parsed_suite.len() != 3) || (parsed_suite[0].to_uppercase() != "OCRA-1") {
