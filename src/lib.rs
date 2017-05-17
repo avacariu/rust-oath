@@ -1,3 +1,8 @@
+//! rust-oath is a rust implementation of three one-time password generators:
+//! [HOTP](https://www.ietf.org/rfc/rfc4226.txt),
+//! [TOTP](https://www.ietf.org/rfc/rfc6238.txt),
+//! [OCRA](https://www.ietf.org/rfc/rfc6287.txt)
+
 extern crate crypto;
 extern crate rustc_serialize;
 extern crate time;
@@ -16,6 +21,22 @@ use std::io::Write as Write_io;
 //use ramp::Int;
 
 mod oathtest;
+
+/// This library provides a wrapper around `rustc_serialize::hex::from_hex()`.
+/// This helps with the functions that expect byte arrays.
+///
+/// # Examples
+///
+/// ```
+/// extern crate oath;
+///
+/// use oath::totp_raw;
+///
+/// fn main () {
+///     let seed = oath::from_hex("ff").unwrap();
+///     totp_raw(seed.as_slice(), 6, 0, 30);
+/// }
+/// ```
 
 pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
     match data.from_hex() {
@@ -42,6 +63,32 @@ fn dynamic_truncation(hs: &[u8]) -> u64 {
     p & 0x7fffffff
 }
 
+/// Computes an one-time password using HOTP algorithm.
+///
+/// `key` is a slice, that represents the shared secret;
+///
+/// `message` is an 8-byte counter in big-endian order;
+///
+/// `digits` - number of digits in output;
+///
+/// `hash` is a hashing algorithm. Must be Sha1 (see [RFC4226](https://www.ietf.org/rfc/rfc4226.txt));
+///
+/// # Example
+///
+/// ```
+/// extern crate crypto;
+/// extern crate oath;
+///
+/// use crypto::sha1::Sha1;
+/// use oath::hotp_custom;
+///
+/// fn main () {
+///     let counter_23 = [0, 0, 0, 0, 0, 0, 0, 23];
+///     assert_eq!(hotp_custom(b"\xff", &counter_23, 6, Sha1::new()), 330795);
+/// }
+/// ```
+
+
 pub fn hotp_custom<D: Digest>(key: &[u8], message: &[u8], digits: u32,
                               hash: D) -> u64 {
     let mut hmac = Hmac::new(hash, key);
@@ -52,12 +99,54 @@ pub fn hotp_custom<D: Digest>(key: &[u8], message: &[u8], digits: u32,
     dynamic_truncation(hs) % 10_u64.pow(digits)
 }
 
+/// Computes an one-time password using HOTP algorithm. Assumes that hashing algorithm is Sha1.
+///
+/// `key` is a slice, that represents the shared secret;
+///
+/// `counter` is a counter. Due to [RFC4226](https://www.ietf.org/rfc/rfc4226.txt) it MUST be synchronized between the
+/// HOTP generator (client) and the HOTP validator (server).
+///
+/// `digits` - number of digits in output;
+///
+/// # Example
+///
+/// ```
+/// extern crate oath;
+///
+/// use oath::hotp_raw;
+///
+/// fn main () {
+///     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
+/// }
+/// ```
+
 pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
     let hash = Sha1::new();
     let message = counter.to_be();
     let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
     hotp_custom(key, msg_ptr, digits, hash)
 }
+
+/// Hi-level function, that computes an one-time password using HOTP algorithm. The most convenient one.
+///
+/// `key` is a string slice, that represents the shared secret;
+///
+/// `counter` is a counter. Due to [RFC4226](https://www.ietf.org/rfc/rfc4226.txt) it MUST be synchronized between the
+/// HOTP generator (client) and the HOTP validator (server).
+///
+/// `digits` - number of digits in output;
+///
+/// # Example
+///
+/// ```
+/// extern crate oath;
+///
+/// use oath::hotp;
+///
+/// fn main () {
+///     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
+/// }
+/// ```
 
 pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
     match key.from_hex() {
