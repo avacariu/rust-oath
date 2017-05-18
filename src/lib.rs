@@ -3,6 +3,8 @@
 //! [TOTP](https://www.ietf.org/rfc/rfc6238.txt),
 //! [OCRA](https://www.ietf.org/rfc/rfc6287.txt)
 
+#![warn(missing_docs)]
+
 extern crate crypto;
 extern crate rustc_serialize;
 extern crate time;
@@ -37,7 +39,6 @@ mod oathtest;
 ///     totp_raw(seed.as_slice(), 6, 0, 30);
 /// }
 /// ```
-
 pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
     match data.from_hex() {
         Ok(d) => Ok(d),
@@ -87,8 +88,6 @@ fn dynamic_truncation(hs: &[u8]) -> u64 {
 ///     assert_eq!(hotp_custom(b"\xff", &counter_23, 6, Sha1::new()), 330795);
 /// }
 /// ```
-
-
 pub fn hotp_custom<D: Digest>(key: &[u8], message: &[u8], digits: u32,
                               hash: D) -> u64 {
     let mut hmac = Hmac::new(hash, key);
@@ -119,7 +118,6 @@ pub fn hotp_custom<D: Digest>(key: &[u8], message: &[u8], digits: u32,
 ///     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
 /// }
 /// ```
-
 pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
     let hash = Sha1::new();
     let message = counter.to_be();
@@ -147,7 +145,6 @@ pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
 ///     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
 /// }
 /// ```
-
 pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
     match key.from_hex() {
         Ok(bytes) => Ok(hotp_raw(bytes.as_ref(), counter, digits)),
@@ -155,6 +152,33 @@ pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
     }
 }
 
+/// Low-level function, that computes an one-time password using TOTP algorithm.
+///
+/// `key` is a slice, that represents the shared secret;
+///
+/// `digits` - number of digits in output (usually 6 or 8);
+///
+/// `epoch` - initial counter time T0 (default value is 0);
+///
+/// `time_step` - time step in seconds (default value is 30);
+///
+/// `current_time` - current Unix time;
+///
+/// `hash` is a hashing algorithm. Can be Sha1, Sha256, Sha512;
+///
+/// # Example
+///
+/// ```
+/// extern crate crypto;
+/// extern crate oath;
+///
+/// use crypto::sha1::Sha1;
+/// use oath::totp_custom;
+///
+/// fn main () {
+///     assert_eq!(totp_custom(b"\xff", 6, 0, 1, 23, Sha1::new()), 330795);
+/// }
+/// ```
 pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
                               time_step: u64, current_time: u64,
                               hash: D) -> u64 {
@@ -164,12 +188,59 @@ pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
     hotp_custom(key, msg_ptr, digits, hash)
 }
 
+/// Computes an one-time password using TOTP algorithm.
+/// Assumes that hashing algorithm is Sha1 and current_time is really current.
+///
+/// `key` is a slice, that represents the shared secret;
+///
+/// `digits` - number of digits in output;
+///
+/// `epoch` - initial counter time T0 (default value is 0)
+///
+/// `time_step` - time step in seconds (default value is 30)
+///
+/// # Example
+///
+/// ```
+/// extern crate oath;
+///
+/// use oath::totp_raw;
+///
+/// fn main () {
+///     // Return value differs every 30 seconds.
+///     totp_raw(b"12345678901234567890", 6, 0, 30);
+/// }
+/// ```
 pub fn totp_raw(key: &[u8], digits: u32, epoch: u64, time_step: u64) -> u64 {
     let hash = Sha1::new();
     let current_time = time::get_time();
     totp_custom(key, digits, epoch, time_step, current_time.sec as u64, hash)
 }
 
+/// Computes an one-time password using TOTP algorithm.
+/// Assumes that hashing algorithm is Sha1 and current_time is really current.
+/// Same as [`totp_raw`](fn.totp_raw.html), but expects key to be a `&str` and returns Result.
+///
+/// `key` is a string slice, that represents the shared secret;
+///
+/// `digits` - number of digits in output;
+///
+/// `epoch` - initial counter time T0 (default value is 0)
+///
+/// `time_step` - time step in seconds (default value is 30)
+///
+/// # Example
+///
+/// ```
+/// extern crate oath;
+///
+/// use oath::totp;
+///
+/// fn main () {
+///     // Return value differs every 30 seconds.
+///     totp("0F35", 6, 0, 30);
+/// }
+/// ```
 pub fn totp(key: &str, digits: u32, epoch: u64,
             time_step: u64) -> Result<u64, &str> {
     match key.from_hex() {
@@ -178,11 +249,49 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
     }
 }
 
+/// ocra is a wrapper over [`ocra_debug`](fn.ocra_debug.html) function. Use this function in production code!
+/// ocra function doesn't leak any info about internal errors, because
+/// such internal info could be a starting point for hackers.
 pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
         password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, ()> {
     ocra_debug(suite, key, counter, question, password, session_info, timestamp).or(Err(()))
 }
 
+/// ocra_debug is an [OCRA](https://tools.ietf.org/html/rfc6287) implementation with
+/// detailed errors descriptions. Use it for debugging purpose only!
+/// For production code use [`ocra`](fn.ocra.html) function.
+///
+/// `suite` is a value representing the suite of operations to compute an OCRA response;
+///
+/// `key` is a secret, previously shared between client and server;
+///
+/// `counter` optional synchronized between the client and the server u64 counter;
+///
+/// `question` mandatory challenge question(s) generated by the parties;
+///
+/// `password` optional ALREADY HASHED value of PIN/password that is known to all parties
+/// during the execution of the algorithm;
+///
+/// `session_info` optional information about the current session;
+///
+/// `timestamp` optional number of time steps since midnight UTC of January 1, 1970;
+/// step size is predefined in the suite;
+///
+/// # Example
+///
+/// ```
+/// extern crate oath;
+///
+/// use oath::ocra;
+///
+/// fn main () {
+///     let suite_c = "OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1";
+///     let STANDARD_KEY_32 = b"12345678901234567890123456789012";
+///     let PIN_1234_SHA1 = &[0x71, 0x10, 0xed, 0xa4, 0xd0, 0x9e, 0x06, 0x2a, 0xa5, 0xe4,
+///                           0xa3, 0x90, 0xb0, 0xa5, 0x72, 0xac, 0x0d, 0x2c, 0x02, 0x20];
+///     assert_eq!(ocra(&suite_c, STANDARD_KEY_32, 6, "12345678", PIN_1234_SHA1, &[], 0), Ok(70069104));
+/// }
+/// ```
 pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
         password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, String> {
     let parsed_suite: Vec<&str> = suite.split(':').collect();
