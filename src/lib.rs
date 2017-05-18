@@ -24,6 +24,16 @@ use std::io::Write as Write_io;
 
 mod oathtest;
 
+/// HashType enum represents possible hashing modes.
+pub enum HashType {
+    /// Sha1
+    SHA1,
+    /// Sha2 256 bit mode
+    SHA256,
+    /// Sha2 512 bit mode
+    SHA512
+}
+
 /// This library provides a wrapper around `rustc_serialize::hex::from_hex()`.
 /// This helps with the functions that expect byte arrays.
 ///
@@ -32,11 +42,11 @@ mod oathtest;
 /// ```
 /// extern crate oath;
 ///
-/// use oath::totp_raw;
+/// use oath::{totp_raw, HashType};
 ///
 /// fn main () {
 ///     let seed = oath::from_hex("ff").unwrap();
-///     totp_raw(seed.as_slice(), 6, 0, 30);
+///     totp_raw(seed.as_slice(), 6, 0, 30, HashType::SHA1);
 /// }
 /// ```
 pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
@@ -204,17 +214,20 @@ pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
 /// ```
 /// extern crate oath;
 ///
-/// use oath::totp_raw;
+/// use oath::{totp_raw, HashType};
 ///
 /// fn main () {
 ///     // Return value differs every 30 seconds.
-///     totp_raw(b"12345678901234567890", 6, 0, 30);
+///     totp_raw(b"12345678901234567890", 6, 0, 30, HashType::SHA1);
 /// }
 /// ```
-pub fn totp_raw(key: &[u8], digits: u32, epoch: u64, time_step: u64) -> u64 {
-    let hash = Sha1::new();
-    let current_time = time::get_time();
-    totp_custom(key, digits, epoch, time_step, current_time.sec as u64, hash)
+pub fn totp_raw(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: HashType) -> u64 {
+    let current_time: u64 = time::get_time().sec as u64;
+    match hash {
+        HashType::SHA1   => totp_custom(key, digits, epoch, time_step, current_time, Sha1::new()),
+        HashType::SHA256 => totp_custom(key, digits, epoch, time_step, current_time, Sha256::new()),
+        HashType::SHA512 => totp_custom(key, digits, epoch, time_step, current_time, Sha512::new()),
+    }
 }
 
 /// Computes an one-time password using TOTP algorithm.
@@ -234,17 +247,17 @@ pub fn totp_raw(key: &[u8], digits: u32, epoch: u64, time_step: u64) -> u64 {
 /// ```
 /// extern crate oath;
 ///
-/// use oath::totp;
+/// use oath::{totp, HashType};
 ///
 /// fn main () {
 ///     // Return value differs every 30 seconds.
-///     totp("0F35", 6, 0, 30);
+///     totp("0F35", 6, 0, 30, HashType::SHA512);
 /// }
 /// ```
 pub fn totp(key: &str, digits: u32, epoch: u64,
-            time_step: u64) -> Result<u64, &str> {
+            time_step: u64, hash: HashType) -> Result<u64, &str> {
     match key.from_hex() {
-        Ok(bytes) => Ok(totp_raw(bytes.as_ref(), digits, epoch, time_step)),
+        Ok(bytes) => Ok(totp_raw(bytes.as_ref(), digits, epoch, time_step, hash)),
         Err(_) => Err("Unable to parse hex.")
     }
 }
@@ -304,10 +317,10 @@ pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
         return Err("Only HOTP crypto function is supported. You requested ".to_string() + crypto_function[0] + ".");
     }
 
-    let hotp_sha_type: SType = match crypto_function[1].to_uppercase().as_str() {
-        "SHA1" => SType::SHA1,
-        "SHA256" => SType::SHA256,
-        "SHA512" => SType::SHA512,
+    let hotp_sha_type: HashType = match crypto_function[1].to_uppercase().as_str() {
+        "SHA1" => HashType::SHA1,
+        "SHA256" => HashType::SHA256,
+        "SHA512" => HashType::SHA512,
         _ => return Err("Unknown hash type. Supported: SHA1/SHA256/SHA512. Requested: ".to_string() + crypto_function[1] + "."),
     };
 
@@ -330,7 +343,7 @@ pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
     let mut timestamp_len:    usize = 0;
 
     let mut parsed_question_type: (QType, usize) = (QType::N, 0);
-    let mut parsed_pin_sha_type: (SType, usize);
+    let mut parsed_pin_sha_type: (HashType, usize);
     let mut timestamp_parsed: u64 = 0;
 
     for p in data_input {
@@ -424,9 +437,9 @@ pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
     }
 
     let result: u64 = match hotp_sha_type {
-        SType::SHA1 => hotp_custom(key, message.as_slice(), num_of_digits, Sha1::new()),
-        SType::SHA256 => hotp_custom(key, message.as_slice(), num_of_digits, Sha256::new()),
-        SType::SHA512 => hotp_custom(key, message.as_slice(), num_of_digits, Sha512::new()),
+        HashType::SHA1 => hotp_custom(key, message.as_slice(), num_of_digits, Sha1::new()),
+        HashType::SHA256 => hotp_custom(key, message.as_slice(), num_of_digits, Sha256::new()),
+        HashType::SHA512 => hotp_custom(key, message.as_slice(), num_of_digits, Sha512::new()),
     };
 
     Ok(result)
@@ -468,15 +481,14 @@ fn parse_timestamp_format(timestamp: &str) -> Result<usize, String> {
     return Ok(coefficient);
 }
 
-enum SType {SHA1, SHA256, SHA512}
-fn parse_pin_sha_type(psha: &str) -> Result<(SType, usize), String> {
+fn parse_pin_sha_type(psha: &str) -> Result<(HashType, usize), String> {
     let psha_local: String = psha.to_uppercase();
     if psha_local.starts_with("PSHA") {
         let (_, num) = psha_local.split_at(4);
         match num {
-            "1" => Ok((SType::SHA1, 20)),
-            "256" => Ok((SType::SHA256, 32)),
-            "512" => Ok((SType::SHA512, 64)),
+            "1" => Ok((HashType::SHA1, 20)),
+            "256" => Ok((HashType::SHA256, 32)),
+            "512" => Ok((HashType::SHA512, 64)),
             _ => Err("Unknown SHA hash mode.".to_string()),
         }
     } else {
