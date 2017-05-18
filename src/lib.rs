@@ -42,11 +42,11 @@ pub enum HashType {
 /// ```
 /// extern crate oath;
 ///
-/// use oath::{totp_raw, HashType};
+/// use oath::{totp_raw_now, HashType};
 ///
 /// fn main () {
 ///     let seed = oath::from_hex("ff").unwrap();
-///     totp_raw(seed.as_slice(), 6, 0, 30, HashType::SHA1);
+///     totp_raw_now(seed.as_slice(), 6, 0, 30, HashType::SHA1);
 /// }
 /// ```
 pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
@@ -56,6 +56,7 @@ pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
     }
 }
 
+#[inline]
 fn u64_from_be_bytes_4(bytes: &[u8], start: usize) -> u64 {
     let mut val = 0u64;
 
@@ -67,6 +68,7 @@ fn u64_from_be_bytes_4(bytes: &[u8], start: usize) -> u64 {
     val
 }
 
+#[inline]
 fn dynamic_truncation(hs: &[u8]) -> u64 {
     let offset_bits = (hs[hs.len()-1] & 0xf) as usize;
     let p = u64_from_be_bytes_4(hs, offset_bits);
@@ -74,31 +76,7 @@ fn dynamic_truncation(hs: &[u8]) -> u64 {
     p & 0x7fffffff
 }
 
-/// Computes an one-time password using HOTP algorithm.
-///
-/// `key` is a slice, that represents the shared secret;
-///
-/// `message` is an 8-byte counter in big-endian order;
-///
-/// `digits` - number of digits in output;
-///
-/// `hash` is a hashing algorithm. Must be Sha1 (see [RFC4226](https://www.ietf.org/rfc/rfc4226.txt));
-///
-/// # Example
-///
-/// ```
-/// extern crate crypto;
-/// extern crate oath;
-///
-/// use crypto::sha1::Sha1;
-/// use oath::hotp_custom;
-///
-/// fn main () {
-///     let counter_23 = [0, 0, 0, 0, 0, 0, 0, 23];
-///     assert_eq!(hotp_custom(b"\xff", &counter_23, 6, Sha1::new()), 330795);
-/// }
-/// ```
-pub fn hotp_custom<D: Digest>(key: &[u8], message: &[u8], digits: u32,
+fn hmac_and_truncate<D: Digest>(key: &[u8], message: &[u8], digits: u32,
                               hash: D) -> u64 {
     let mut hmac = Hmac::new(hash, key);
     hmac.input(message);
@@ -108,14 +86,15 @@ pub fn hotp_custom<D: Digest>(key: &[u8], message: &[u8], digits: u32,
     dynamic_truncation(hs) % 10_u64.pow(digits)
 }
 
-/// Computes an one-time password using HOTP algorithm. Assumes that hashing algorithm is Sha1.
+/// Computes an one-time password using HOTP algorithm.
+/// Same as [`hotp`](fn.hotp.html), but expects key to be a `&[u8]`.
 ///
 /// `key` is a slice, that represents the shared secret;
 ///
 /// `counter` is a counter. Due to [RFC4226](https://www.ietf.org/rfc/rfc4226.txt) it MUST be synchronized between the
-/// HOTP generator (client) and the HOTP validator (server).
+/// HOTP generator (client) and the HOTP validator (server);
 ///
-/// `digits` - number of digits in output;
+/// `digits` - number of digits in output (usually 6 or 8);
 ///
 /// # Example
 ///
@@ -132,17 +111,18 @@ pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
     let hash = Sha1::new();
     let message = counter.to_be();
     let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
-    hotp_custom(key, msg_ptr, digits, hash)
+    hmac_and_truncate(key, msg_ptr, digits, hash)
 }
 
-/// Hi-level function, that computes an one-time password using HOTP algorithm. The most convenient one.
+/// Hi-level function, that computes an one-time password using HOTP algorithm.
+/// Same as [`hotp_raw`](fn.hotp_raw.html), but expects key to be a `&str` instead.
 ///
 /// `key` is a string slice, that represents the shared secret;
 ///
 /// `counter` is a counter. Due to [RFC4226](https://www.ietf.org/rfc/rfc4226.txt) it MUST be synchronized between the
-/// HOTP generator (client) and the HOTP validator (server).
+/// HOTP generator (client) and the HOTP validator (server);
 ///
-/// `digits` - number of digits in output;
+/// `digits` - number of digits in output (usually 6 or 8);
 ///
 /// # Example
 ///
@@ -172,7 +152,7 @@ pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
 ///
 /// `time_step` - time step in seconds (default value is 30);
 ///
-/// `current_time` - current Unix time;
+/// `current_time` - current Unix time (in seconds);
 ///
 /// `hash` is a hashing algorithm. Can be Sha1, Sha256, Sha512;
 ///
@@ -195,44 +175,103 @@ pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
     let counter: u64 = (current_time - epoch) / time_step;
     let message = counter.to_be();
     let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
-    hotp_custom(key, msg_ptr, digits, hash)
+    hmac_and_truncate(key, msg_ptr, digits, hash)
 }
 
-/// Computes an one-time password using TOTP algorithm.
-/// Assumes that hashing algorithm is Sha1 and current_time is really current.
+/// Computes an one-time password using TOTP algorithm for arbitrary timestamp.
+/// Same as [`totp_custom_time`](fn.totp_custom_time.html), but expects key to be a `&[u8]`.
 ///
 /// `key` is a slice, that represents the shared secret;
 ///
-/// `digits` - number of digits in output;
+/// `digits` - number of digits in output (usually 6 or 8);
 ///
-/// `epoch` - initial counter time T0 (default value is 0)
+/// `epoch` - initial counter time T0 (default value is 0);
 ///
-/// `time_step` - time step in seconds (default value is 30)
+/// `time_step` - time step in seconds (default value is 30);
+///
+/// `timestamp` - moment of time to be computed (in seconds);
 ///
 /// # Example
 ///
 /// ```
 /// extern crate oath;
 ///
-/// use oath::{totp_raw, HashType};
+/// use oath::{totp_raw_custom_time, HashType};
 ///
 /// fn main () {
-///     // Return value differs every 30 seconds.
-///     totp_raw(b"12345678901234567890", 6, 0, 30, HashType::SHA1);
+///     totp_raw_custom_time(b"12345678901234567890", 6, 0, 30, 26*365*24*60*60, HashType::SHA1);
 /// }
 /// ```
-pub fn totp_raw(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: HashType) -> u64 {
-    let current_time: u64 = time::get_time().sec as u64;
+pub fn totp_raw_custom_time(key: &[u8], digits: u32, epoch: u64, time_step: u64,
+                            timestamp: u64, hash: HashType) -> u64 {
     match hash {
-        HashType::SHA1   => totp_custom(key, digits, epoch, time_step, current_time, Sha1::new()),
-        HashType::SHA256 => totp_custom(key, digits, epoch, time_step, current_time, Sha256::new()),
-        HashType::SHA512 => totp_custom(key, digits, epoch, time_step, current_time, Sha512::new()),
+        HashType::SHA1   => totp_custom(key, digits, epoch, time_step, timestamp, Sha1::new()),
+        HashType::SHA256 => totp_custom(key, digits, epoch, time_step, timestamp, Sha256::new()),
+        HashType::SHA512 => totp_custom(key, digits, epoch, time_step, timestamp, Sha512::new()),
     }
 }
 
-/// Computes an one-time password using TOTP algorithm.
-/// Assumes that hashing algorithm is Sha1 and current_time is really current.
-/// Same as [`totp_raw`](fn.totp_raw.html), but expects key to be a `&str` and returns Result.
+/// Computes an one-time password for this moment using TOTP algorithm.
+/// Same as [`totp_now`](fn.totp_now.html), but expects key to be a `&[u8]`.
+///
+/// `key` is a slice, that represents the shared secret;
+///
+/// `digits` - number of digits in output (usually 6 or 8);
+///
+/// `epoch` - initial counter time T0 (default value is 0);
+///
+/// `time_step` - time step in seconds (default value is 30);
+///
+/// # Example
+///
+/// ```
+/// extern crate oath;
+///
+/// use oath::{totp_raw_now, HashType};
+///
+/// fn main () {
+///     // Return value differs every 30 seconds.
+///     totp_raw_now(b"12345678901234567890", 6, 0, 30, HashType::SHA1);
+/// }
+/// ```
+pub fn totp_raw_now(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: HashType) -> u64 {
+    let current_time: u64 = time::get_time().sec as u64;
+    totp_raw_custom_time(key, digits, epoch, time_step, current_time, hash)
+}
+
+/// Computes an one-time password using TOTP algorithm for arbitrary timestamp.
+/// Same as [`totp_raw_custom_time`](fn.totp_raw_custom_time.html), but expects key to be a `&str` and returns Result.
+///
+/// `key` is a string slice, that represents the shared secret;
+///
+/// `digits` - number of digits in output;
+///
+/// `epoch` - initial counter time T0 (default value is 0);
+///
+/// `time_step` - time step in seconds (default value is 30);
+///
+/// # Example
+///
+/// ```
+/// extern crate oath;
+///
+/// use oath::{totp_custom_time, HashType};
+///
+/// fn main () {
+///     // Returns TOTP result for 436437456 second after 1 Jan 1970
+///     totp_custom_time("0F35", 6, 0, 30, 436437456, HashType::SHA512);
+/// }
+/// ```
+pub fn totp_custom_time(key: &str, digits: u32, epoch: u64,
+                        time_step: u64, timestamp: u64, hash: HashType) -> Result<u64, &str> {
+    match key.from_hex() {
+        Ok(bytes) => Ok(totp_raw_custom_time(bytes.as_ref(), digits, epoch, time_step, timestamp, hash)),
+        Err(_) => Err("Unable to parse hex.")
+    }
+}
+
+/// Computes an one-time password for current moment of time using TOTP algorithm.
+/// Same as [`totp_raw_now`](fn.totp_raw_now.html), but expects key to be a `&str` and returns Result.
 ///
 /// `key` is a string slice, that represents the shared secret;
 ///
@@ -247,17 +286,17 @@ pub fn totp_raw(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: HashT
 /// ```
 /// extern crate oath;
 ///
-/// use oath::{totp, HashType};
+/// use oath::{totp_now, HashType};
 ///
 /// fn main () {
 ///     // Return value differs every 30 seconds.
-///     totp("0F35", 6, 0, 30, HashType::SHA512);
+///     totp_now("0F35", 6, 0, 30, HashType::SHA512);
 /// }
 /// ```
-pub fn totp(key: &str, digits: u32, epoch: u64,
+pub fn totp_now(key: &str, digits: u32, epoch: u64,
             time_step: u64, hash: HashType) -> Result<u64, &str> {
     match key.from_hex() {
-        Ok(bytes) => Ok(totp_raw(bytes.as_ref(), digits, epoch, time_step, hash)),
+        Ok(bytes) => Ok(totp_raw_now(bytes.as_ref(), digits, epoch, time_step, hash)),
         Err(_) => Err("Unable to parse hex.")
     }
 }
@@ -266,8 +305,8 @@ pub fn totp(key: &str, digits: u32, epoch: u64,
 /// ocra function doesn't leak any info about internal errors, because
 /// such internal info could be a starting point for hackers.
 pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
-        password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, ()> {
-    ocra_debug(suite, key, counter, question, password, session_info, timestamp).or(Err(()))
+        password: &[u8], session_info: &[u8], num_of_time_steps: u64) -> Result<u64, ()> {
+    ocra_debug(suite, key, counter, question, password, session_info, num_of_time_steps).or(Err(()))
 }
 
 /// ocra_debug is an [OCRA](https://tools.ietf.org/html/rfc6287) implementation with
@@ -287,7 +326,7 @@ pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
 ///
 /// `session_info` optional information about the current session;
 ///
-/// `timestamp` optional number of time steps since midnight UTC of January 1, 1970;
+/// `num_of_time_steps` optional number of time steps since midnight UTC of January 1, 1970;
 /// step size is predefined in the suite;
 ///
 /// # Example
@@ -306,7 +345,7 @@ pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
 /// }
 /// ```
 pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
-        password: &[u8], session_info: &[u8], timestamp: u64) -> Result<u64, String> {
+        password: &[u8], session_info: &[u8], num_of_time_steps: u64) -> Result<u64, String> {
     let parsed_suite: Vec<&str> = suite.split(':').collect();
     if (parsed_suite.len() != 3) || (parsed_suite[0].to_uppercase() != "OCRA-1") {
         return Err("Malformed suite string.".to_string());
@@ -385,7 +424,7 @@ pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
             b't' | b'T' => {
                 match parse_timestamp_format(p) {
                     Ok(value) => {
-                        timestamp_parsed = timestamp / (value as u64);
+                        timestamp_parsed = num_of_time_steps / (value as u64);
                         timestamp_len = 8;
                     },
                     Err(err_str) => return Err(err_str + " Wrong timestamp parameter " + p + "."),
@@ -437,9 +476,9 @@ pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
     }
 
     let result: u64 = match hotp_sha_type {
-        HashType::SHA1 => hotp_custom(key, message.as_slice(), num_of_digits, Sha1::new()),
-        HashType::SHA256 => hotp_custom(key, message.as_slice(), num_of_digits, Sha256::new()),
-        HashType::SHA512 => hotp_custom(key, message.as_slice(), num_of_digits, Sha512::new()),
+        HashType::SHA1   => hmac_and_truncate(key, message.as_slice(), num_of_digits, Sha1::new()),
+        HashType::SHA256 => hmac_and_truncate(key, message.as_slice(), num_of_digits, Sha256::new()),
+        HashType::SHA512 => hmac_and_truncate(key, message.as_slice(), num_of_digits, Sha512::new()),
     };
 
     Ok(result)

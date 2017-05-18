@@ -35,11 +35,11 @@ fn test_hotp() {
 
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
-    assert_eq!(hotp_custom(b"\xff", &var_23_as_be_arr, 6, Sha1::new()), 330795);
-    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha1::new()), 330795);
-    assert_eq!(hotp_custom(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha256::new()), 225210);
-    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha1::new()), 7615146);
-    assert_eq!(hotp_custom(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha256::new()), 6447746);
+    assert_eq!(hmac_and_truncate(b"\xff", &var_23_as_be_arr, 6, Sha1::new()), 330795);
+    assert_eq!(hmac_and_truncate(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha1::new()), 330795);
+    assert_eq!(hmac_and_truncate(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha256::new()), 225210);
+    assert_eq!(hmac_and_truncate(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha1::new()), 7615146);
+    assert_eq!(hmac_and_truncate(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha256::new()), 6447746);
 
     // test values from RFC 4226
     assert_eq!(hotp_raw(b"12345678901234567890", 0, 6), 755224);
