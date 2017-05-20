@@ -24,7 +24,7 @@ use std::io::Write as Write_io;
 
 mod oathtest;
 
-/// HashType enum represents possible hashing modes.
+/// `HashType` enum represents possible hashing modes.
 pub enum HashType {
     /// Sha1
     SHA1,
@@ -46,7 +46,7 @@ pub enum HashType {
 ///
 /// fn main () {
 ///     let seed = oath::from_hex("ff").unwrap();
-///     totp_raw_now(seed.as_slice(), 6, 0, 30, HashType::SHA1);
+///     totp_raw_now(seed.as_slice(), 6, 0, 30, &HashType::SHA1);
 /// }
 /// ```
 pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
@@ -57,6 +57,7 @@ pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
 }
 
 #[inline]
+#[allow(identity_op)]   //clippy grumbles about (1 * 8)
 fn u64_from_be_bytes_4(bytes: &[u8], start: usize) -> u64 {
     let mut val = 0u64;
 
@@ -199,12 +200,12 @@ pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
 /// use oath::{totp_raw_custom_time, HashType};
 ///
 /// fn main () {
-///     totp_raw_custom_time(b"12345678901234567890", 6, 0, 30, 26*365*24*60*60, HashType::SHA1);
+///     totp_raw_custom_time(b"12345678901234567890", 6, 0, 30, 26*365*24*60*60, &HashType::SHA1);
 /// }
 /// ```
 pub fn totp_raw_custom_time(key: &[u8], digits: u32, epoch: u64, time_step: u64,
-                            timestamp: u64, hash: HashType) -> u64 {
-    match hash {
+                            timestamp: u64, hash: &HashType) -> u64 {
+    match *hash {
         HashType::SHA1   => totp_custom(key, digits, epoch, time_step, timestamp, Sha1::new()),
         HashType::SHA256 => totp_custom(key, digits, epoch, time_step, timestamp, Sha256::new()),
         HashType::SHA512 => totp_custom(key, digits, epoch, time_step, timestamp, Sha512::new()),
@@ -231,10 +232,10 @@ pub fn totp_raw_custom_time(key: &[u8], digits: u32, epoch: u64, time_step: u64,
 ///
 /// fn main () {
 ///     // Return value differs every 30 seconds.
-///     totp_raw_now(b"12345678901234567890", 6, 0, 30, HashType::SHA1);
+///     totp_raw_now(b"12345678901234567890", 6, 0, 30, &HashType::SHA1);
 /// }
 /// ```
-pub fn totp_raw_now(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: HashType) -> u64 {
+pub fn totp_raw_now(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: &HashType) -> u64 {
     let current_time: u64 = time::get_time().sec as u64;
     totp_raw_custom_time(key, digits, epoch, time_step, current_time, hash)
 }
@@ -259,11 +260,11 @@ pub fn totp_raw_now(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: H
 ///
 /// fn main () {
 ///     // Returns TOTP result for 436437456 second after 1 Jan 1970
-///     totp_custom_time("0F35", 6, 0, 30, 436437456, HashType::SHA512);
+///     totp_custom_time("0F35", 6, 0, 30, 436437456, &HashType::SHA512);
 /// }
 /// ```
-pub fn totp_custom_time(key: &str, digits: u32, epoch: u64,
-                        time_step: u64, timestamp: u64, hash: HashType) -> Result<u64, &str> {
+pub fn totp_custom_time<'a>(key: &str, digits: u32, epoch: u64,
+                        time_step: u64, timestamp: u64, hash: &HashType) -> Result<u64, &'a str> {
     match key.from_hex() {
         Ok(bytes) => Ok(totp_raw_custom_time(bytes.as_ref(), digits, epoch, time_step, timestamp, hash)),
         Err(_) => Err("Unable to parse hex.")
@@ -290,18 +291,18 @@ pub fn totp_custom_time(key: &str, digits: u32, epoch: u64,
 ///
 /// fn main () {
 ///     // Return value differs every 30 seconds.
-///     totp_now("0F35", 6, 0, 30, HashType::SHA512);
+///     totp_now("0F35", 6, 0, 30, &HashType::SHA512);
 /// }
 /// ```
-pub fn totp_now(key: &str, digits: u32, epoch: u64,
-            time_step: u64, hash: HashType) -> Result<u64, &str> {
+pub fn totp_now<'a>(key: &str, digits: u32, epoch: u64,
+            time_step: u64, hash: &HashType) -> Result<u64, &'a str> {
     match key.from_hex() {
         Ok(bytes) => Ok(totp_raw_now(bytes.as_ref(), digits, epoch, time_step, hash)),
         Err(_) => Err("Unable to parse hex.")
     }
 }
 
-/// ocra is a wrapper over [`ocra_debug`](fn.ocra_debug.html) function. Use this function in production code!
+/// `ocra` is a wrapper over [`ocra_debug`](fn.ocra_debug.html) function. Use this function in production code!
 /// ocra function doesn't leak any info about internal errors, because
 /// such internal info could be a starting point for hackers.
 pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
@@ -309,7 +310,7 @@ pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
     ocra_debug(suite, key, counter, question, password, session_info, num_of_time_steps).or(Err(()))
 }
 
-/// ocra_debug is an [OCRA](https://tools.ietf.org/html/rfc6287) implementation with
+/// `ocra_debug` is an [OCRA](https://tools.ietf.org/html/rfc6287) implementation with
 /// detailed errors descriptions. Use it for debugging purpose only!
 /// For production code use [`ocra`](fn.ocra.html) function.
 ///
@@ -517,7 +518,7 @@ fn parse_timestamp_format(timestamp: &str) -> Result<usize, String> {
         _ => return Err("Can't parse timestamp. S/M/H time intervals are supported.".to_string()),
     }
 
-    return Ok(coefficient);
+    Ok(coefficient)
 }
 
 fn parse_pin_sha_type(psha: &str) -> Result<(HashType, usize), String> {
@@ -535,7 +536,7 @@ fn parse_pin_sha_type(psha: &str) -> Result<(HashType, usize), String> {
     }
 }
 
-fn push_correct_question<'a>(message: &mut Vec<u8>, q_info: (QType, usize), question: &str) -> Result<(), String> {
+fn push_correct_question(message: &mut Vec<u8>, q_info: (QType, usize), question: &str) -> Result<(), String> {
     let (q_type, q_length) = q_info;
     match q_type {
         QType::A => {
