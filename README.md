@@ -1,8 +1,9 @@
-# rust-oath [![Build Status](https://travis-ci.org/crypto-universe/rust-oath.svg?branch=master)](https://travis-ci.org/crypto-universe/rust-oath)
+# oath2 [![Build Status](https://travis-ci.org/crypto-universe/rust-oath.svg?branch=master)](https://travis-ci.org/crypto-universe/rust-oath)
 
 
 This library aims to provide implementations of HOTP, TOTP, and OCRA as
-specified by the RFCs.
+specified by the RFCs. oath2 is a successor of [oath](https://github.com/avacariu/rust-oath)
+library. I had to fork it, because avacariu doesn't react on PRs.
 
 Implemented:
 
@@ -15,10 +16,6 @@ Implemented:
 OCRA numeric question mode can't use long Int, it is forced to use u64 instead.
 This data type leads us to question length limitation: 19 symbols. Number must fit u64.
 For default challenge format (N08) it is more that enough.
-
-**PRs are more than welcome!** I'm not using Rust much these days, so I don't
-notice if anything in this code breaks. If you send me a PR, I'll do my best to
-merge it quickly.
 
 ## Examples
 
