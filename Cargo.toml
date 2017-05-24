@@ -10,6 +10,7 @@ An pure Rust implementation of OATH algorithms. Provides HOTP, TOTP and OCRA alg
 homepage = "https://github.com/crypto-universe/rust-oath"
 repository = "https://github.com/crypto-universe/rust-oath"
 keywords = ["oath", "totp", "hotp", "ocra"]
+categories = ["cryptography"]
 
 [dependencies]
 rust-crypto = "^0.2.34"
