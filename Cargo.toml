@@ -7,8 +7,9 @@ license = "MIT"
 description = """
 An pure Rust implementation of OATH algorithms. Provides HOTP, TOTP and OCRA algorithms.
 """
-homepage = "https://github.com/crypto-universe/rust-oath"
-repository = "https://github.com/crypto-universe/rust-oath"
+homepage = "https://github.com/crypto-universe/oath2"
+repository = "https://github.com/crypto-universe/oath2"
+documentation = "https://docs.rs/oath2/0.9.0/oath2/"
 keywords = ["oath", "totp", "hotp", "ocra"]
 categories = ["cryptography"]
 
