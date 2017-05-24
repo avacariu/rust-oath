@@ -1,7 +1,7 @@
 [package]
 
 name = "oath2"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Andrei Vacariu <andrei@avacariu.me>", "crypto-universe <ykp@protonmail.ch>"]
 license = "MIT"
 description = """
@@ -9,7 +9,7 @@ An pure Rust implementation of OATH algorithms. Provides HOTP, TOTP and OCRA alg
 """
 homepage = "https://github.com/crypto-universe/oath2"
 repository = "https://github.com/crypto-universe/oath2"
-documentation = "https://docs.rs/oath2/0.9.0/oath2/"
+documentation = "https://docs.rs/oath2/"
 keywords = ["oath", "totp", "hotp", "ocra"]
 categories = ["cryptography"]
 
