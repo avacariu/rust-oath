@@ -25,25 +25,32 @@ For default challenge format (N08) it is more that enough.
 
 ### HOTP
 
-    // htop(key, counter, digits)
-    // hotp_raw takes bytes as the key
-    assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
-    // hotp takes a hex string as the key
-    assert_eq!(hotp("ff", 23, 6), 330795);
+    extern crate oath2;
 
-    hotp_custom(b"\xff", 23, 6, Sha1::new());
+    use oath2::hotp;
+
+    fn main () {
+        assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
+    }
 
 ### TOTP
 
 All the times below are in seconds.
 
-    // totp(key, digits, epoch, time_step)
-    totp("ff", 6, 0, 30); // defaults for most TOTP implementations
-    totp_raw(b"\xff", 6, 0, 30);
-    // totp_custom(key, digits, epoch, time_step, current_time, hash)
-    totp_custom(b"\xff", 6, 0, 30, 255, Sha1::new());
+    extern crate oath2;
+
+    use oath2::{totp_raw_now, HashType};
+
+    fn main () {
+        // Return value differs every 30 seconds.
+        totp_raw_now(b"12345678901234567890", 6, 0, 30, &HashType::SHA1);
+    }
 
 ### OCRA
+
+    extern crate oath2;
+
+    use oath2::ocra;
 
     let NULL: &[u8] = &[];
     let STANDARD_KEY_20: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
