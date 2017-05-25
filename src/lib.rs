@@ -30,7 +30,7 @@ pub enum HashType {
     SHA512
 }
 
-/// This library provides a wrapper around `rustc_serialize::hex::from_hex()`.
+/// This library provides a wrapper around `rustc_hex::from_hex()`.
 /// This helps with the functions that expect byte arrays.
 ///
 /// # Examples
@@ -140,6 +140,7 @@ pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
 }
 
 /// Low-level function, that computes an one-time password using TOTP algorithm.
+/// It's generic over hashing algorithm `D`.
 ///
 /// `key` is a slice, that represents the shared secret;
 ///
@@ -150,8 +151,6 @@ pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
 /// `time_step` - time step in seconds (default value is 30);
 ///
 /// `current_time` - current Unix time (in seconds);
-///
-/// `hash` is a hashing algorithm. Can be Sha1, Sha256, Sha512;
 ///
 /// # Example
 ///
