@@ -1,5 +1,13 @@
-#![cfg(test)]
-use super::*;
+extern crate oath2;
+extern crate sha_1 as sha1;
+extern crate sha2;
+extern crate digest;
+
+use oath2::*;
+use sha1::Sha1;
+use sha2::Sha256;
+use sha2::Sha512;
+use digest::Digest;
 
 static NULL: &[u8] = &[];
 static STANDARD_KEY_20: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,
@@ -19,27 +27,18 @@ static PIN_1234_SHA1: &[u8] = &[0x71, 0x10, 0xed, 0xa4, 0xd0, 0x9e, 0x06, 0x2a, 
                                 0xa3, 0x90, 0xb0, 0xa5, 0x72, 0xac, 0x0d, 0x2c, 0x02, 0x20];
 #[test]
 fn sha1_pin_correct() {
-    let mut sha: Sha1 = Sha1::new();
-    sha.input_str("1234");
+    let mut sha: Sha1 = Sha1::default();
+    sha.input("1234".as_bytes());
 
-    let mut output = [0u8; 20];
-    sha.result(&mut output);
+    let result = sha.result();
 
-    assert!(&PIN_1234_SHA1[..] == output);
+    assert!(&PIN_1234_SHA1[..] == result.as_slice());
 }
 
 #[test]
 fn test_hotp() {
-    let var_23_as_be_arr = [0, 0, 0, 0, 0, 0, 0, 23];
-    let var_10_as_be_arr = [0, 0, 0, 0, 0, 0, 0, 10];
-
     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
-    assert_eq!(hmac_and_truncate(b"\xff", &var_23_as_be_arr, 6, Sha1::new()), 330795);
-    assert_eq!(hmac_and_truncate(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha1::new()), 330795);
-    assert_eq!(hmac_and_truncate(from_hex("ff").unwrap().as_ref(), &var_23_as_be_arr, 6, Sha256::new()), 225210);
-    assert_eq!(hmac_and_truncate(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha1::new()), 7615146);
-    assert_eq!(hmac_and_truncate(from_hex("3f906a54263361fccf").unwrap().as_ref(), &var_10_as_be_arr, 7, Sha256::new()), 6447746);
 
     // test values from RFC 4226
     assert_eq!(hotp_raw(b"12345678901234567890", 0, 6), 755224);
@@ -54,38 +53,39 @@ fn test_hotp() {
     assert_eq!(hotp_raw(b"12345678901234567890", 9, 6), 520489);
 }
 
+
 #[test]
 fn test_totp() {
     let seeds20 = b"12345678901234567890";
     let seeds32 = b"12345678901234567890123456789012";
     let seeds64 = b"1234567890123456789012345678901234567890123456789012345678901234";
 
-    assert_eq!(totp_custom(b"\xff", 6, 0, 1, 23, Sha1::new()), 330795);
+    assert_eq!(totp_custom::<Sha1>(b"\xff", 6, 0, 1, 23), 330795);
 
     // test values from RFC 6238
-    assert_eq!(totp_custom(seeds20, 8, 0, 30, 59, Sha1::new()), 94287082);
-    assert_eq!(totp_custom(seeds32, 8, 0, 30, 59, Sha256::new()), 46119246);
-    assert_eq!(totp_custom(seeds64, 8, 0, 30, 59, Sha512::new()), 90693936);
+    assert_eq!(totp_custom::<Sha1>(seeds20, 8, 0, 30, 59), 94287082);
+    assert_eq!(totp_custom::<Sha256>(seeds32, 8, 0, 30, 59), 46119246);
+    assert_eq!(totp_custom::<Sha512>(seeds64, 8, 0, 30, 59), 90693936);
 
-    assert_eq!(totp_custom(seeds20, 8, 0, 30, 1111111109, Sha1::new()), 07081804);
-    assert_eq!(totp_custom(seeds32, 8, 0, 30, 1111111109, Sha256::new()), 68084774);
-    assert_eq!(totp_custom(seeds64, 8, 0, 30, 1111111109, Sha512::new()), 25091201);
+    assert_eq!(totp_custom::<Sha1>(seeds20, 8, 0, 30, 1111111109), 07081804);
+    assert_eq!(totp_custom::<Sha256>(seeds32, 8, 0, 30, 1111111109), 68084774);
+    assert_eq!(totp_custom::<Sha512>(seeds64, 8, 0, 30, 1111111109), 25091201);
 
-    assert_eq!(totp_custom(seeds20, 8, 0, 30, 1111111111, Sha1::new()), 14050471);
-    assert_eq!(totp_custom(seeds32, 8, 0, 30, 1111111111, Sha256::new()), 67062674);
-    assert_eq!(totp_custom(seeds64, 8, 0, 30, 1111111111, Sha512::new()), 99943326);
+    assert_eq!(totp_custom::<Sha1>(seeds20, 8, 0, 30, 1111111111), 14050471);
+    assert_eq!(totp_custom::<Sha256>(seeds32, 8, 0, 30, 1111111111), 67062674);
+    assert_eq!(totp_custom::<Sha512>(seeds64, 8, 0, 30, 1111111111), 99943326);
 
-    assert_eq!(totp_custom(seeds20, 8, 0, 30, 1234567890, Sha1::new()), 89005924);
-    assert_eq!(totp_custom(seeds32, 8, 0, 30, 1234567890, Sha256::new()), 91819424);
-    assert_eq!(totp_custom(seeds64, 8, 0, 30, 1234567890, Sha512::new()), 93441116);
+    assert_eq!(totp_custom::<Sha1>(seeds20, 8, 0, 30, 1234567890), 89005924);
+    assert_eq!(totp_custom::<Sha256>(seeds32, 8, 0, 30, 1234567890), 91819424);
+    assert_eq!(totp_custom::<Sha512>(seeds64, 8, 0, 30, 1234567890), 93441116);
 
-    assert_eq!(totp_custom(seeds20, 8, 0, 30, 2000000000, Sha1::new()), 69279037);
-    assert_eq!(totp_custom(seeds32, 8, 0, 30, 2000000000, Sha256::new()), 90698825);
-    assert_eq!(totp_custom(seeds64, 8, 0, 30, 2000000000, Sha512::new()), 38618901);
+    assert_eq!(totp_custom::<Sha1>(seeds20, 8, 0, 30, 2000000000), 69279037);
+    assert_eq!(totp_custom::<Sha256>(seeds32, 8, 0, 30, 2000000000), 90698825);
+    assert_eq!(totp_custom::<Sha512>(seeds64, 8, 0, 30, 2000000000), 38618901);
 
-    assert_eq!(totp_custom(seeds20, 8, 0, 30, 20000000000, Sha1::new()), 65353130);
-    assert_eq!(totp_custom(seeds32, 8, 0, 30, 20000000000, Sha256::new()), 77737706);
-    assert_eq!(totp_custom(seeds64, 8, 0, 30, 20000000000, Sha512::new()), 47863826);
+    assert_eq!(totp_custom::<Sha1>(seeds20, 8, 0, 30, 20000000000), 65353130);
+    assert_eq!(totp_custom::<Sha256>(seeds32, 8, 0, 30, 20000000000), 77737706);
+    assert_eq!(totp_custom::<Sha512>(seeds64, 8, 0, 30, 20000000000), 47863826);
 }
 
 #[test]

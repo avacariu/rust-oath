@@ -5,24 +5,20 @@
 
 #![warn(missing_docs)]
 
-extern crate crypto;
-extern crate rustc_serialize;
-extern crate time;
-//extern crate ramp;
+extern crate sha_1 as sha1;
+extern crate sha2;
+extern crate digest;
+extern crate hmac;
+// Replace with `hex` crate?
+extern crate rustc_hex;
 
-use crypto::sha1::Sha1;
-use crypto::sha2::Sha256;
-use crypto::sha2::Sha512;
-use crypto::hmac::Hmac;
-use crypto::mac::Mac;
-use crypto::digest::Digest;
-use rustc_serialize::hex::FromHex;
-use rustc_serialize::hex::ToHex;
+use sha1::Sha1;
+use sha2::Sha256;
+use sha2::Sha512;
+use hmac::{Hmac, Mac};
+use digest::Digest;
+use rustc_hex::{FromHex, ToHex};
 use std::io::Write as Write_io;
-//use std::fmt::Write as Write_fmt;
-//use ramp::Int;
-
-mod oathtest;
 
 /// `HashType` enum represents possible hashing modes.
 pub enum HashType {
@@ -78,9 +74,9 @@ fn dynamic_truncation(hs: &[u8]) -> u64 {
     p & 0x7fffffff
 }
 
-fn hmac_and_truncate<D: Digest>(key: &[u8], message: &[u8], digits: u32,
-                              hash: D) -> u64 {
-    let mut hmac = Hmac::new(hash, key);
+fn hmac_and_truncate<D: Digest + Default>(key: &[u8], message: &[u8],
+                                          digits: u32) -> u64 {
+    let mut hmac = Hmac::<D>::new(key);
     hmac.input(message);
     let result = hmac.result();
     let hs = result.code();
@@ -110,10 +106,9 @@ fn hmac_and_truncate<D: Digest>(key: &[u8], message: &[u8], digits: u32,
 /// }
 /// ```
 pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
-    let hash = Sha1::new();
     let message = counter.to_be();
     let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
-    hmac_and_truncate(key, msg_ptr, digits, hash)
+    hmac_and_truncate::<Sha1>(key, msg_ptr, digits)
 }
 
 /// Hi-level function, that computes an one-time password using HOTP algorithm.
@@ -161,23 +156,22 @@ pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
 /// # Example
 ///
 /// ```
-/// extern crate crypto;
+/// extern crate sha_1 as sha1;
 /// extern crate oath2;
 ///
-/// use crypto::sha1::Sha1;
+/// use sha1::Sha1;
 /// use oath2::totp_custom;
 ///
 /// fn main () {
-///     assert_eq!(totp_custom(b"\xff", 6, 0, 1, 23, Sha1::new()), 330795);
+///     assert_eq!(totp_custom::<Sha1>(b"\xff", 6, 0, 1, 23), 330795);
 /// }
 /// ```
-pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
-                              time_step: u64, current_time: u64,
-                              hash: D) -> u64 {
+pub fn totp_custom<D: Digest + Default>(key: &[u8], digits: u32, epoch: u64,
+                                    time_step: u64, current_time: u64) -> u64 {
     let counter: u64 = (current_time - epoch) / time_step;
     let message = counter.to_be();
     let msg_ptr: &[u8] = unsafe { ::std::slice::from_raw_parts(&message as *const u64 as *const u8, 8) };
-    hmac_and_truncate(key, msg_ptr, digits, hash)
+    hmac_and_truncate::<D>(key, msg_ptr, digits)
 }
 
 /// Computes an one-time password using TOTP algorithm for arbitrary timestamp.
@@ -207,9 +201,9 @@ pub fn totp_custom<D: Digest>(key: &[u8], digits: u32, epoch: u64,
 pub fn totp_raw_custom_time(key: &[u8], digits: u32, epoch: u64, time_step: u64,
                             timestamp: u64, hash: &HashType) -> u64 {
     match *hash {
-        HashType::SHA1   => totp_custom(key, digits, epoch, time_step, timestamp, Sha1::new()),
-        HashType::SHA256 => totp_custom(key, digits, epoch, time_step, timestamp, Sha256::new()),
-        HashType::SHA512 => totp_custom(key, digits, epoch, time_step, timestamp, Sha512::new()),
+        HashType::SHA1   => totp_custom::<Sha1>(key, digits, epoch, time_step, timestamp),
+        HashType::SHA256 => totp_custom::<Sha256>(key, digits, epoch, time_step, timestamp),
+        HashType::SHA512 => totp_custom::<Sha512>(key, digits, epoch, time_step, timestamp),
     }
 }
 
@@ -237,7 +231,9 @@ pub fn totp_raw_custom_time(key: &[u8], digits: u32, epoch: u64, time_step: u64,
 /// }
 /// ```
 pub fn totp_raw_now(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: &HashType) -> u64 {
-    let current_time: u64 = time::get_time().sec as u64;
+    use std::time::{UNIX_EPOCH, SystemTime};
+    let current_time: u64 = SystemTime::now().duration_since(UNIX_EPOCH)
+        .expect("Earlier than 1970-01-01 00:00:00 UTC").as_secs();
     totp_raw_custom_time(key, digits, epoch, time_step, current_time, hash)
 }
 
@@ -478,9 +474,9 @@ pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
     }
 
     let result: u64 = match hotp_sha_type {
-        HashType::SHA1   => hmac_and_truncate(key, message.as_slice(), num_of_digits, Sha1::new()),
-        HashType::SHA256 => hmac_and_truncate(key, message.as_slice(), num_of_digits, Sha256::new()),
-        HashType::SHA512 => hmac_and_truncate(key, message.as_slice(), num_of_digits, Sha512::new()),
+        HashType::SHA1   => hmac_and_truncate::<Sha1>(key, message.as_slice(), num_of_digits),
+        HashType::SHA256 => hmac_and_truncate::<Sha256>(key, message.as_slice(), num_of_digits),
+        HashType::SHA512 => hmac_and_truncate::<Sha512>(key, message.as_slice(), num_of_digits),
     };
 
     Ok(result)
