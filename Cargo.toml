@@ -1,7 +1,6 @@
 [package]
-
 name = "oath2"
-version = "0.9.1"
+version = "0.10.0"
 authors = ["Andrei Vacariu <andrei@avacariu.me>", "crypto-universe <ykp@protonmail.ch>"]
 license = "MIT"
 description = """
@@ -14,6 +13,8 @@ keywords = ["oath", "totp", "hotp", "ocra"]
 categories = ["cryptography"]
 
 [dependencies]
-rust-crypto = "^0.2.34"
-rustc-serialize = "^0.3.16"
-time = "^0.1.34"
+sha-1 = "0.3"
+sha2 = "0.5"
+digest = "0.5"
+hmac = "0.1"
+rustc-hex = "1.0"
