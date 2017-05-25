@@ -91,7 +91,7 @@ functions.
 ### Misc
 
 If you don't want to use other crates for hex conversion, this library provides a
-convinience function `from_hex()`. This helps with the functions that expect byte
+convenient function `from_hex()`. This helps with the functions that expect byte
 arrays.
 
     let seed = oath::from_hex("ff").unwrap();
