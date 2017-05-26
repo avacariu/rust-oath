@@ -1,4 +1,5 @@
 # rust-oath
+[![Build Status](https://travis-ci.org/avacariu/rust-oath.svg?branch=master)](https://travis-ci.org/avacariu/rust-oath)
 [![oath on crates.io](https://img.shields.io/crates/v/oath.svg)](https://crates.io/crates/oath)
 [![Documentation](https://docs.rs/oath/badge.svg)](https://docs.rs/oath/)
 [![MIT license](https://img.shields.io/dub/l/vibe-d.svg)](https://opensource.org/licenses/MIT)
