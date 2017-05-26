@@ -1,12 +1,12 @@
 #![allow(unknown_lints)]
 #![allow(zero_prefixed_literal)]
 
-extern crate oath2;
+extern crate oath;
 extern crate sha_1 as sha1;
 extern crate sha2;
 extern crate digest;
 
-use oath2::*;
+use oath::*;
 use sha1::Sha1;
 use sha2::Sha256;
 use sha2::Sha512;

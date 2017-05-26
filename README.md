@@ -1,13 +1,11 @@
-# oath2
-[![Build Status](https://travis-ci.org/crypto-universe/oath2.svg?branch=master)](https://travis-ci.org/crypto-universe/oath2)
-[![oath2 on crates.io](https://img.shields.io/crates/v/oath2.svg)](https://crates.io/crates/oath2)
-[![Documentation](https://docs.rs/oath2/badge.svg)](https://docs.rs/oath2/)
+# rust-oath
+[![oath on crates.io](https://img.shields.io/crates/v/oath.svg)](https://crates.io/crates/oath)
+[![Documentation](https://docs.rs/oath/badge.svg)](https://docs.rs/oath/)
 [![MIT license](https://img.shields.io/dub/l/vibe-d.svg)](https://opensource.org/licenses/MIT)
 
 
 This library aims to provide implementations of HOTP, TOTP, and OCRA as
-specified by the RFCs. oath2 is a successor of [oath](https://github.com/avacariu/rust-oath)
-library. I had to fork it, because avacariu doesn't react on PRs.
+specified by the RFCs.
 
 Implemented:
 
@@ -25,9 +23,9 @@ For default challenge format (N08) it is more that enough.
 
 ### HOTP
 
-    extern crate oath2;
+    extern crate oath;
 
-    use oath2::hotp;
+    use oath::hotp;
 
     fn main () {
         assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
@@ -37,9 +35,9 @@ For default challenge format (N08) it is more that enough.
 
 All the times below are in seconds.
 
-    extern crate oath2;
+    extern crate oath;
 
-    use oath2::{totp_raw_now, HashType};
+    use oath::{totp_raw_now, HashType};
 
     fn main () {
         // Return value differs every 30 seconds.
@@ -48,9 +46,9 @@ All the times below are in seconds.
 
 ### OCRA
 
-    extern crate oath2;
+    extern crate oath;
 
-    use oath2::ocra;
+    use oath::ocra;
 
     let NULL: &[u8] = &[];
     let STANDARD_KEY_20: &[u8] = &[0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30,

@@ -36,12 +36,12 @@ pub enum HashType {
 /// # Examples
 ///
 /// ```
-/// extern crate oath2;
+/// extern crate oath;
 ///
-/// use oath2::{totp_raw_now, HashType};
+/// use oath::{totp_raw_now, HashType};
 ///
 /// fn main () {
-///     let seed = oath2::from_hex("ff").unwrap();
+///     let seed = oath::from_hex("ff").unwrap();
 ///     totp_raw_now(seed.as_slice(), 6, 0, 30, &HashType::SHA1);
 /// }
 /// ```
@@ -97,9 +97,9 @@ fn hmac_and_truncate<D: Digest + Default>(key: &[u8], message: &[u8],
 /// # Example
 ///
 /// ```
-/// extern crate oath2;
+/// extern crate oath;
 ///
-/// use oath2::hotp_raw;
+/// use oath::hotp_raw;
 ///
 /// fn main () {
 ///     assert_eq!(hotp_raw(b"\xff", 23, 6), 330795);
@@ -124,9 +124,9 @@ pub fn hotp_raw(key: &[u8], counter: u64, digits: u32) -> u64 {
 /// # Example
 ///
 /// ```
-/// extern crate oath2;
+/// extern crate oath;
 ///
-/// use oath2::hotp;
+/// use oath::hotp;
 ///
 /// fn main () {
 ///     assert_eq!(hotp("ff", 23, 6).unwrap(), 330795);
@@ -156,10 +156,10 @@ pub fn hotp(key: &str, counter: u64, digits: u32) -> Result<u64, &str> {
 ///
 /// ```
 /// extern crate sha_1 as sha1;
-/// extern crate oath2;
+/// extern crate oath;
 ///
 /// use sha1::Sha1;
-/// use oath2::totp_custom;
+/// use oath::totp_custom;
 ///
 /// fn main () {
 ///     assert_eq!(totp_custom::<Sha1>(b"\xff", 6, 0, 1, 23), 330795);
@@ -189,9 +189,9 @@ pub fn totp_custom<D: Digest + Default>(key: &[u8], digits: u32, epoch: u64,
 /// # Example
 ///
 /// ```
-/// extern crate oath2;
+/// extern crate oath;
 ///
-/// use oath2::{totp_raw_custom_time, HashType};
+/// use oath::{totp_raw_custom_time, HashType};
 ///
 /// fn main () {
 ///     totp_raw_custom_time(b"12345678901234567890", 6, 0, 30, 26*365*24*60*60, &HashType::SHA1);
@@ -220,9 +220,9 @@ pub fn totp_raw_custom_time(key: &[u8], digits: u32, epoch: u64, time_step: u64,
 /// # Example
 ///
 /// ```
-/// extern crate oath2;
+/// extern crate oath;
 ///
-/// use oath2::{totp_raw_now, HashType};
+/// use oath::{totp_raw_now, HashType};
 ///
 /// fn main () {
 ///     // Return value differs every 30 seconds.
@@ -250,9 +250,9 @@ pub fn totp_raw_now(key: &[u8], digits: u32, epoch: u64, time_step: u64, hash: &
 /// # Example
 ///
 /// ```
-/// extern crate oath2;
+/// extern crate oath;
 ///
-/// use oath2::{totp_custom_time, HashType};
+/// use oath::{totp_custom_time, HashType};
 ///
 /// fn main () {
 ///     // Returns TOTP result for 436437456 second after 1 Jan 1970
@@ -281,9 +281,9 @@ pub fn totp_custom_time<'a>(key: &str, digits: u32, epoch: u64,
 /// # Example
 ///
 /// ```
-/// extern crate oath2;
+/// extern crate oath;
 ///
-/// use oath2::{totp_now, HashType};
+/// use oath::{totp_now, HashType};
 ///
 /// fn main () {
 ///     // Return value differs every 30 seconds.
@@ -329,9 +329,9 @@ pub fn ocra(suite: &str, key: &[u8], counter: u64, question: &str,
 /// # Example
 ///
 /// ```
-/// extern crate oath2;
+/// extern crate oath;
 ///
-/// use oath2::ocra;
+/// use oath::ocra;
 ///
 /// fn main () {
 ///     let suite_c = "OCRA-1:HOTP-SHA256-8:C-QN08-PSHA1";
