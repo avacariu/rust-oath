@@ -4,7 +4,7 @@ version = "0.10.1"
 authors = ["Andrei Vacariu <andrei@avacariu.me>", "crypto-universe <ykp@protonmail.ch>"]
 license = "MIT"
 description = """
-An pure Rust implementation of OATH algorithms. Provides HOTP, TOTP and OCRA algorithms.
+An implementation of OATH algorithms in Rust. Includes TOTP, HOTP, and OCRA.
 """
 homepage = "https://github.com/avacariu/rust-oath"
 repository = "https://github.com/avacariu/rust-oath"
