@@ -1,6 +1,6 @@
 [package]
 name = "oath"
-version = "0.10.1"
+version = "0.10.2"
 authors = ["Andrei Vacariu <andrei@avacariu.me>", "crypto-universe <ykp@protonmail.ch>"]
 license = "MIT"
 description = """
