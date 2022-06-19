@@ -13,8 +13,8 @@ keywords = ["oath", "totp", "hotp", "ocra"]
 categories = ["cryptography"]
 
 [dependencies]
-sha-1 = "0.3"
-sha2 = "0.5"
-digest = "0.5"
-hmac = "0.1"
-rustc-hex = "1.0"
+sha-1 = "0.10"
+sha2 = "0.10"
+digest = "0.10"
+hmac = "0.12"
+rustc-hex = "2.1"
