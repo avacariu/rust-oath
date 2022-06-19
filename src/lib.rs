@@ -54,6 +54,8 @@ pub fn from_hex(data: &str) -> Result<Vec<u8>, &str> {
 
 #[inline]
 #[allow(unknown_lints)] //cargo doesn't know identity_op lint
+#[allow(clippy::identity_op)]
+#[allow(clippy::erasing_op)]
 fn u64_from_be_bytes_4(bytes: &[u8], start: usize) -> u64 {
     let mut val = 0u64;
 
@@ -361,7 +363,7 @@ pub fn ocra_debug(suite: &str, key: &[u8], counter: u64, question: &str,
 
     let num_of_digits = if crypto_function.len() == 3 {
         let temp_num = crypto_function[2].parse().unwrap_or(0);
-        if temp_num > 10 || temp_num < 4 {
+        if ! (4..=10).contains(&temp_num) {
             return Err("Number of returned digits should satisfy: 4 <= num <= 10. You requested ".to_string() + crypto_function[2] + ".");
         }
         temp_num
@@ -496,7 +498,7 @@ fn parse_timestamp_format(timestamp: &str) -> Result<usize, String> {
     let (_, time_step) = timestamp.split_at(1);
     let (num_s, time_type) = time_step.split_at(time_step.len()-1);
     let num = num_s.parse::<usize>().unwrap_or(0);
-    if num < 1 || num > 59 {
+    if ! (1..=59).contains(&num) {
         return Err("Wrong timestamp value.".to_string());
     }
     let coefficient: usize;
@@ -541,10 +543,8 @@ fn push_correct_question(message: &mut Vec<u8>, q_info: (QType, usize), question
         },
         QType::N => {
             // While RAMP is broken, let's assume, that question numbers will be short
-            if question.len() > 19 {
-                // That is the max number len for u64
-                assert!(false, "Temporary limitation question.len() < 20 is exceeded.");
-            }
+            // That is the max number len for u64
+            assert!(question.len() <= 19, "Temporary limitation question.len() < 20 is exceeded.");
             let q_as_u64: u64 = question.parse::<u64>().unwrap();
             let mut q_as_hex_str: String = format!("{:X}", q_as_u64);
             if q_as_hex_str.len() % 2 == 1 {
@@ -618,7 +618,7 @@ fn ocra_parse_question(question: &str) -> Result<(QType, usize), String> {
     };
 
     if q_type_result.is_err() {
-        return Err(q_type_result.err().unwrap().to_string());
+        return Err(q_type_result.err().unwrap());
     }
 
     let q_len_result = len_str.parse::<usize>();
@@ -627,7 +627,7 @@ fn ocra_parse_question(question: &str) -> Result<(QType, usize), String> {
     }
 
     let q_len = q_len_result.unwrap();
-    if q_len < 4 || q_len > 64 {
+    if ! (4..=64).contains(&q_len) {
         return Err("Make sure you request question length such that 4 <= question_length <= 64.".to_string());
     }
 
