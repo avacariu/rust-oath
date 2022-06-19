@@ -1,8 +1,7 @@
 #![allow(unknown_lints)]
-#![allow(zero_prefixed_literal)]
 
 extern crate oath;
-extern crate sha_1 as sha1;
+extern crate sha1;
 extern crate sha2;
 extern crate digest;
 
@@ -31,9 +30,9 @@ static PIN_1234_SHA1: &[u8] = &[0x71, 0x10, 0xed, 0xa4, 0xd0, 0x9e, 0x06, 0x2a, 
 #[test]
 fn sha1_pin_correct() {
     let mut sha: Sha1 = Sha1::default();
-    sha.input(b"1234");
+    sha.update(b"1234");
 
-    let result = sha.result();
+    let result = sha.finalize();
 
     assert_eq!(&PIN_1234_SHA1[..], result.as_slice());
 }
